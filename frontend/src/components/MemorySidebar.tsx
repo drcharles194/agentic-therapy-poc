@@ -1,31 +1,8 @@
 import React from 'react'
-
-interface MemoryData {
-  user_id: string
-  user_name: string
-  sage: {
-    reflections: Array<{
-      id: string
-      content: string
-      timestamp: string
-    }>
-    emotions: Array<{
-      label: string
-      intensity: number
-      timestamp: string
-    }>
-    self_kindness_events: Array<{
-      description: string
-      timestamp: string
-    }>
-    contradictions: Array<{
-      summary: string
-    }>
-  }
-}
+import { type MemoryData } from '../utils/api'
 
 interface MemorySidebarProps {
-  memoryData?: MemoryData
+  memoryData?: MemoryData | null
   isOpen: boolean
   onClose: () => void
 }
