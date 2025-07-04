@@ -22,13 +22,13 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO", env="LOG_LEVEL")
     
     # Neo4j Configuration
-    neo4j_uri: str = Field(env="NEO4J_URI")
-    neo4j_username: str = Field(env="NEO4J_USERNAME")
-    neo4j_password: str = Field(env="NEO4J_PASSWORD")
+    neo4j_uri: str = Field(default="bolt://localhost:7687", env="NEO4J_URI")
+    neo4j_username: str = Field(default="neo4j", env="NEO4J_USERNAME")
+    neo4j_password: str = Field(default="test_password", env="NEO4J_PASSWORD")
     neo4j_database: str = Field(default="neo4j", env="NEO4J_DATABASE")
     
     # Anthropic/Claude Configuration
-    anthropic_api_key: str = Field(env="ANTHROPIC_API_KEY")
+    anthropic_api_key: str = Field(default="test_key", env="ANTHROPIC_API_KEY")
     
     # CORS Settings
     allowed_origins: List[str] = Field(
