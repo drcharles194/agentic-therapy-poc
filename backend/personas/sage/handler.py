@@ -165,6 +165,7 @@ Respond with warmth and gentle curiosity. Help them explore what's beneath the s
     def _validate_memory_proposal(self, proposal: Dict[str, Any]) -> bool:
         """
         Apply governance rules to validate memory proposals.
+        Following the "any criteria met" approach from Memory Interaction Architecture.
         
         Args:
             proposal: Memory proposal to validate
@@ -175,41 +176,76 @@ Respond with warmth and gentle curiosity. Help them explore what's beneath the s
         update_type = proposal.get("update_type")
         data = proposal.get("data", {})
         
-        # Basic validation rules
+        # Storage criteria - if ANY are met, store the memory
+        criteria = {
+            'emotional_significance': False,
+            'therapeutic_value': False,
+            'user_growth': False,
+            'unique_insight': True,  # Assume unique unless proven duplicate
+            'privacy_safe': True     # Assume safe unless proven otherwise
+        }
+        
         if update_type == "reflection":
-            content = data.get("content", "")
-            # Don't store trivial reflections
-            if len(content.strip()) < 10:
+            content = data.get("content", "").strip()
+            # Reject only truly empty content or spam
+            if len(content) < 3:
                 return False
-            # Don't store purely factual statements
-            trivial_patterns = ["i am", "my name is", "i live", "i work at"]
-            if any(pattern in content.lower() for pattern in trivial_patterns):
-                return False
+            # Basic privacy check - reject if contains obvious sensitive info
+            sensitive_patterns = ["ssn", "social security", "credit card", "password", "phone number"]
+            if any(pattern in content.lower() for pattern in sensitive_patterns):
+                criteria['privacy_safe'] = False
+            else:
+                criteria['therapeutic_value'] = True  # All reflections have therapeutic value
+                # Check for emotional significance
+                emotion_words = ["feel", "felt", "emotion", "hurt", "pain", "joy", "sad", "angry", "afraid", "anxious", "hopeful"]
+                if any(word in content.lower() for word in emotion_words):
+                    criteria['emotional_significance'] = True
                 
         elif update_type == "emotion":
-            label = data.get("label", "")
+            label = data.get("label", "").strip()
             intensity = data.get("intensity", 0)
-            # Only store emotions with meaningful intensity
-            if intensity < 0.3:
-                return False
-            # Validate emotion labels
-            valid_emotions = ["anxiety", "sadness", "joy", "anger", "fear", "hope", "shame", "guilt", "love", "excitement", "frustration", "peace", "confusion"]
-            if label.lower() not in valid_emotions:
-                return False
+            # Very permissive - store any detected emotion
+            if label and intensity > 0:
+                criteria['emotional_significance'] = True
+                criteria['therapeutic_value'] = True
+                # Only reject if obviously invalid
+                if intensity > 1.0 or len(label) < 2:
+                    return False
                 
         elif update_type == "self_kindness":
-            description = data.get("description", "")
-            # Ensure self-kindness events are meaningful
-            if len(description.strip()) < 5:
-                return False
+            description = data.get("description", "").strip()
+            # Any self-kindness is therapeutically valuable
+            if len(description) >= 3:
+                criteria['user_growth'] = True
+                criteria['therapeutic_value'] = True
                 
         elif update_type == "contradiction":
-            summary = data.get("summary", "")
-            # Ensure contradictions are substantial
-            if len(summary.strip()) < 10:
-                return False
+            summary = data.get("summary", "").strip()
+            # Contradictions show important internal conflicts
+            if len(summary) >= 5:
+                criteria['therapeutic_value'] = True
+                criteria['emotional_significance'] = True
+                
+        elif update_type == "persona_note":
+            content = data.get("content", "").strip()
+            # Therapeutic notes are always valuable
+            if len(content) >= 3:
+                criteria['therapeutic_value'] = True
         
-        return True
+        # Store if ANY criteria met and privacy is safe
+        should_store = criteria['privacy_safe'] and any([
+            criteria['emotional_significance'],
+            criteria['therapeutic_value'], 
+            criteria['user_growth'],
+            criteria['unique_insight']
+        ])
+        
+        if not should_store:
+            logger.debug(f"Memory proposal rejected - criteria: {criteria}")
+        else:
+            logger.debug(f"Memory proposal approved - criteria: {criteria}")
+            
+        return should_store
 
 
 # Global instance

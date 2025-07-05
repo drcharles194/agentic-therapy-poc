@@ -8,8 +8,11 @@ import logging
 from typing import Dict, Any, List, Optional
 from datetime import datetime
 import uuid
+import json
+import re
 
 from backend.services.anthropic_service import anthropic_service
+from backend.services.neo4j import neo4j_service
 
 logger = logging.getLogger(__name__)
 
@@ -71,6 +74,175 @@ Respond in this exact JSON format:
 }}
 """
 
+    def _extract_moment_context(self, user_message: str) -> str:
+        """Extract meaningful context from user message for moment description."""
+        if not user_message:
+            return "General conversation"
+        
+        # Truncate very long messages
+        if len(user_message) > 100:
+            user_message = user_message[:100] + "..."
+        
+        # Clean up the message for context
+        context = user_message.strip()
+        
+        # If the message starts with common conversational patterns, extract the key part
+        if context.lower().startswith(("i feel", "i'm feeling", "i am feeling")):
+            return f"Expressing feelings: {context}"
+        elif context.lower().startswith(("i think", "i'm thinking", "i am thinking")):
+            return f"Sharing thoughts: {context}"
+        elif context.lower().startswith(("i want", "i'm wanting", "i need")):
+            return f"Discussing needs/wants: {context}"
+        elif context.lower().startswith(("my", "i have", "i had")):
+            return f"Personal experience: {context}"
+        elif "?" in context:
+            return f"Seeking guidance: {context}"
+        else:
+            return f"Discussion: {context}"
+    
+    def _create_contextual_analysis_prompt(self, user_message: str, sage_response: str, existing_memory: Dict[str, Any]) -> str:
+        """Create analysis prompt with existing memory context to prevent duplicates."""
+        
+        # Extract existing data for context
+        existing_emotions = existing_memory.get("sage", {}).get("emotions", [])
+        existing_reflections = existing_memory.get("sage", {}).get("reflections", [])
+        existing_values = existing_memory.get("sage", {}).get("values", [])
+        existing_patterns = existing_memory.get("sage", {}).get("patterns", [])
+        existing_contradictions = existing_memory.get("sage", {}).get("contradictions", [])
+        
+        # Build context strings
+        emotion_context = ""
+        if existing_emotions:
+            recent_emotions = [f"- {e['label']} ({e.get('intensity', 0.5):.1f})" for e in existing_emotions[-5:]]
+            emotion_context = f"""
+EXISTING EMOTIONS (last 5):
+{chr(10).join(recent_emotions)}
+"""
+
+        reflection_context = ""
+        if existing_reflections:
+            recent_reflections = [f"- {r['content'][:100]}..." for r in existing_reflections[-3:]]
+            reflection_context = f"""
+EXISTING REFLECTIONS (last 3):
+{chr(10).join(recent_reflections)}
+"""
+
+        values_context = ""
+        if existing_values:
+            recent_values = [f"- {v['name']}: {v.get('description', '')[:60]}..." for v in existing_values[-3:]]
+            values_context = f"""
+EXISTING VALUES (last 3):
+{chr(10).join(recent_values)}
+"""
+
+        patterns_context = ""
+        if existing_patterns:
+            recent_patterns = [f"- {p['description'][:80]}..." for p in existing_patterns[-3:]]
+            patterns_context = f"""
+EXISTING PATTERNS (last 3):
+{chr(10).join(recent_patterns)}
+"""
+
+        contradiction_context = ""
+        if existing_contradictions:
+            recent_contradictions = [f"- {c['summary'][:80]}..." for c in existing_contradictions[-3:]]
+            contradiction_context = f"""
+EXISTING CONTRADICTIONS:
+{chr(10).join(recent_contradictions)}
+"""
+
+        # Create enhanced prompt
+        contextual_prompt = f"""
+You are a memory analyst for the Sage therapeutic AI system. Your job is to analyze conversations and identify what's worth storing in the user's memory graph.
+
+CRITICAL: Review the user's EXISTING MEMORY below to avoid duplicates and identify new insights:
+
+{emotion_context}{reflection_context}{values_context}{patterns_context}{contradiction_context}
+
+## DEDUPLICATION RULES:
+1. **EMOTIONS**: Only store if significantly different from recent emotions or if intensity changed notably
+2. **REFLECTIONS**: Only store genuinely new insights, not variations of existing ones
+3. **VALUES**: Only store newly revealed or clarified core values, not variations of existing ones
+4. **PATTERNS**: Only store newly identified recurring patterns, not variations of existing ones
+5. **CONTRADICTIONS**: Only store if revealing new value tensions not already captured
+
+## CURRENT CONVERSATION:
+User Message: "{user_message}"
+Sage Response: "{sage_response}"
+
+Review this conversation and identify ONLY NEW content worth storing:
+
+1. **MOMENT TITLE**: Create a concise, therapeutic title that captures the essence of this conversation moment (3-6 words)
+2. **REFLECTIONS**: Deep insights, realizations, or meaningful thoughts that are genuinely new
+3. **EMOTIONS**: Clear emotional states that are new or show significant intensity changes
+4. **VALUES**: Core values, principles, or what matters most to the user (newly revealed or clarified)
+5. **PATTERNS**: Recurring behavioral, emotional, or thought patterns (newly identified)
+6. **CONTRADICTIONS**: New value tensions or conflicts not already identified
+
+## MOMENT TITLE GUIDELINES:
+- Keep it therapeutic and meaningful (e.g., "Grief after father's death", "Workplace boundary setting", "Self-doubt about relationships")
+- Focus on the core emotional/psychological theme
+- Use clinical but compassionate language
+- Avoid raw quotes; use descriptive, professional phrasing
+
+Only propose storing content that is:
+- Explicitly expressed by the user (not inferred)
+- Genuinely NEW or significantly different from existing memories
+- Meaningful enough to inform future therapeutic conversations
+- Respectful of the user's privacy and autonomy
+
+IMPORTANT: Be highly selective. With existing memory context, most conversations may not need any new storage. Only store content that adds genuine therapeutic value beyond what's already known.
+
+Respond in this exact JSON format:
+{{
+  "should_store": true/false,
+  "moment_title": "Therapeutic title (3-6 words): focus on core emotional/psychological theme, use clinical but compassionate language",
+  "reflections": [
+    {{
+      "content": "user's exact words or paraphrased insight",
+      "significance": "why this reflection is therapeutically valuable AND new",
+      "source": "user"
+    }}
+  ],
+  "emotions": [
+    {{
+      "label": "anxiety/sadness/joy/etc",
+      "intensity": 0.1-1.0,
+      "evidence": "what in their words suggests this emotion",
+      "why_new": "why this emotion observation is different from existing ones"
+    }}
+  ],
+  "values": [
+    {{
+      "name": "core value name (e.g., 'family', 'autonomy', 'authenticity')",
+      "description": "what this value means to the user",
+      "importance": 0.1-1.0,
+      "evidence": "user's words that reveal this value",
+      "why_new": "why this value identification is new or newly clarified"
+    }}
+  ],
+  "patterns": [
+    {{
+      "description": "clear description of the recurring pattern",
+      "pattern_type": "behavioral/emotional/cognitive",
+      "frequency": "frequent/occasional/rare",
+      "evidence": "user's words that show this pattern",
+      "why_new": "why this pattern identification is new"
+    }}
+  ],
+  "contradictions": [
+    {{
+      "summary": "brief description of the value tension",
+      "details": "the conflicting desires/beliefs expressed",
+      "why_new": "why this tension is different from existing contradictions"
+    }}
+  ],
+  "reasoning": "brief explanation of storage decisions with reference to existing memory"
+}}
+"""
+
+        return contextual_prompt
+
     async def analyze_conversation(
         self, 
         user_id: str, 
@@ -91,10 +263,12 @@ Respond in this exact JSON format:
         logger.info(f"Analyzing conversation for memory storage: user {user_id}")
         
         try:
-            # Create analysis prompt
-            analysis_prompt = self.analysis_prompt_template.format(
-                user_message=user_message,
-                sage_response=sage_response
+            # Get existing user memory to inform analysis
+            existing_memory = await neo4j_service.get_user_memory(user_id)
+            
+            # Create analysis prompt with existing context
+            analysis_prompt = self._create_contextual_analysis_prompt(
+                user_message, sage_response, existing_memory
             )
             
             # Get Claude's analysis
@@ -104,8 +278,6 @@ Respond in this exact JSON format:
             )
             
             # Parse the JSON response
-            import json
-            import re
             try:
                 # Strip markdown code blocks if present
                 clean_response = analysis_response.strip()
@@ -143,7 +315,7 @@ Respond in this exact JSON format:
 
     def create_memory_proposals(self, analysis: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Convert analysis results into memory update proposals.
+        Convert analysis results into memory update proposals using the new complex schema.
         
         Args:
             analysis: Results from analyze_conversation
@@ -158,7 +330,31 @@ Respond in this exact JSON format:
         user_id = analysis["user_id"]
         timestamp = analysis["timestamp"]
         
-        # Create reflection proposals
+        # Create a unique session ID for this conversation
+        session_id = f"session_{int(datetime.now().timestamp())}_{user_id.split('_')[-1]}"
+        
+        # Always create a moment for this interaction
+        moment_id = str(uuid.uuid4())
+        
+        # Use AI-generated moment title, or fallback to extracted context
+        moment_title = analysis.get("moment_title")
+        if not moment_title:
+            # Fallback to extracted context if AI didn't provide a title
+            user_message = analysis.get("conversation", {}).get("user_message", "")
+            moment_title = self._extract_moment_context(user_message)
+        
+        proposals.append({
+            "update_type": "moment",
+            "data": {
+                "id": moment_id,
+                "timestamp": timestamp,
+                "context": moment_title,
+                "user_id": user_id,
+                "session_id": session_id
+            }
+        })
+        
+        # Create reflection proposals with new schema
         for reflection in analysis.get("reflections", []):
             reflection_id = str(uuid.uuid4())
             proposals.append({
@@ -166,11 +362,11 @@ Respond in this exact JSON format:
                 "data": {
                     "id": reflection_id,
                     "content": reflection["content"],
-                    "timestamp": timestamp,
-                    "archived": False,
-                    "source": reflection.get("source", "user"),
-                    "agent_origin": None,
+                    "insight_type": "realization",
+                    "depth_level": 2,  # Therapist-validated insights are deeper
+                    "confidence": 0.8,  # High confidence from Claude analysis
                     "user_id": user_id,
+                    "moment_id": moment_id,
                     "significance": reflection.get("significance", "")
                 }
             })
@@ -180,51 +376,76 @@ Respond in this exact JSON format:
                 proposals.append({
                     "update_type": "persona_note",
                     "data": {
-                        "reflection_id": reflection_id,
-                        "type": "observation",
+                        "id": str(uuid.uuid4()),
+                        "persona": "Sage",
+                        "note_type": "observation",
                         "content": f"Therapeutic significance: {reflection['significance']}",
-                        "user_id": user_id
+                        "user_id": user_id,
+                        "reflection_id": reflection_id
                     }
                 })
         
-        # Create emotion proposals
+        # Create emotion proposals with new schema
         for emotion in analysis.get("emotions", []):
             proposals.append({
                 "update_type": "emotion",
                 "data": {
+                    "id": str(uuid.uuid4()),
                     "label": emotion["label"],
                     "intensity": emotion.get("intensity", 0.5),
-                    "timestamp": timestamp,
-                    "archived_at": None,
+                    "nuance": emotion.get("evidence", "Detected in therapeutic conversation"),
+                    "bodily_sensation": "unspecified",
                     "user_id": user_id,
-                    "evidence": emotion.get("evidence", "")
+                    "moment_id": moment_id
                 }
             })
         
-        # Create self-kindness proposals
-        for kindness in analysis.get("self_kindness_events", []):
-            proposals.append({
-                "update_type": "self_kindness",
-                "data": {
-                    "description": kindness["description"],
-                    "timestamp": timestamp,
-                    "user_id": user_id,
-                    "evidence": kindness.get("evidence", "")
-                }
-            })
-        
-        # Create contradiction proposals
+        # Create contradiction proposals with new schema
         for contradiction in analysis.get("contradictions", []):
             proposals.append({
                 "update_type": "contradiction",
                 "data": {
+                    "id": str(uuid.uuid4()),
                     "summary": contradiction["summary"],
-                    "details": contradiction.get("details", ""),
-                    "user_id": user_id
+                    "tension_type": "values",  # Default to values tension
+                    "intensity": 0.6,  # Medium intensity by default
+                    "user_id": user_id,
+                    "moment_id": moment_id,
+                    "details": contradiction.get("details", "")
                 }
             })
         
-        logger.info(f"Created {len(proposals)} memory proposals for user {user_id}")
+        # Create value proposals with new schema
+        for value in analysis.get("values", []):
+            proposals.append({
+                "update_type": "value",
+                "data": {
+                    "id": str(uuid.uuid4()),
+                    "name": value["name"],
+                    "description": value.get("description", ""),
+                    "importance": value.get("importance", 0.7),
+                    "strength": 0.8,  # New values are typically strongly held
+                    "awareness_level": 0.9,  # Explicitly stated values have high awareness
+                    "user_id": user_id,
+                    "evidence": value.get("evidence", "")
+                }
+            })
+        
+        # Create pattern proposals with new schema
+        for pattern in analysis.get("patterns", []):
+            proposals.append({
+                "update_type": "pattern",
+                "data": {
+                    "id": str(uuid.uuid4()),
+                    "description": pattern["description"],
+                    "pattern_type": pattern.get("pattern_type", "behavioral"),
+                    "frequency": pattern.get("frequency", "occasional"),
+                    "user_id": user_id,
+                    "evidence": pattern.get("evidence", "")
+                }
+            })
+        
+        logger.info(f"Created {len(proposals)} complex memory proposals for user {user_id}")
         return proposals
 
 

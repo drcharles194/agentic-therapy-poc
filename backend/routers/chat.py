@@ -64,7 +64,7 @@ async def get_user_memory(user_id: str) -> UserMemory:
     
     try:
         # Use Neo4j service for real memory retrieval
-        memory_data = await neo4j_service.get_user_memory(user_id)
+        memory_data = await neo4j_service.get_user_memory_for_display(user_id)
         
         # Convert to UserMemory format
         user_memory = UserMemory(

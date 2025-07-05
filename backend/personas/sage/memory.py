@@ -48,46 +48,111 @@ def _get_fallback_context(user_id: str) -> Dict[str, Any]:
         "user_id": user_id,
         "user_name": "Demo User",
         "sage": {
-            "reflections": [
+            "moments": [
                 {
-                    "timestamp": "2024-06-01T10:32:00Z",
-                    "id": "reflection-1",
-                    "archived": False,
-                    "source": "user",
-                    "agent_origin": None,
-                    "user_id": user_id,
-                    "content": "I feel like I've been running without direction.",
-                    "persona_notes": [
+                    "moment": {
+                        "id": "demo-moment-1",
+                        "timestamp": "2024-06-01T10:32:00Z",
+                        "context": "Feeling uncertain about direction in life"
+                    },
+                    "emotions": [
                         {
-                            "persona": "Sage",
-                            "type": "gentle_reframe",
-                            "content": "This reflection carries ambivalence. Would you like to revisit this later?",
-                            "created_at": "2024-06-02T16:45:00Z",
-                            "user_id": user_id
+                            "emotion": {
+                                "id": "demo-emotion-1",
+                                "label": "anxiety",
+                                "intensity": 0.7,
+                                "nuance": "anticipatory worry about the future"
+                            },
+                            "prominence": 0.8
+                        }
+                    ],
+                    "reflections": [
+                        {
+                            "reflection": {
+                                "id": "demo-reflection-1",
+                                "content": "I feel like I've been running without direction",
+                                "insight_type": "realization",
+                                "depth_level": 2,
+                                "confidence": 0.8
+                            },
+                            "spontaneity": 0.6
                         }
                     ]
                 }
             ],
-            "emotions": [
+            "emotional_patterns": [
                 {
-                    "label": "anxiety",
-                    "intensity": 0.7,
-                    "timestamp": "2024-06-01T09:00:00Z",
-                    "archived_at": None,
-                    "user_id": user_id
+                    "emotion": {
+                        "id": "demo-emotion-1",
+                        "label": "anxiety",
+                        "intensity": 0.7,
+                        "nuance": "anticipatory worry about the future"
+                    },
+                    "co_occurs_with": [],
+                    "transforms_into": []
                 }
             ],
-            "self_kindness_events": [
+            "reflective_web": [
                 {
-                    "description": "Took a walk instead of spiraling",
-                    "timestamp": "2024-06-01T14:00:00Z",
-                    "user_id": user_id
+                    "reflection": {
+                        "id": "demo-reflection-1",
+                        "content": "I feel like I've been running without direction",
+                        "insight_type": "realization",
+                        "depth_level": 2,
+                        "confidence": 0.8
+                    },
+                    "builds_on": [],
+                    "challenges": [],
+                    "inspired_by": [],
+                    "explains": []
                 }
             ],
-            "contradictions": [
+            "value_system": [
                 {
-                    "summary": "Wants freedom but avoids taking space",
-                    "user_id": user_id
+                    "value": {
+                        "id": "demo-value-1",
+                        "name": "freedom",
+                        "description": "The ability to choose my own path",
+                        "importance": 0.9
+                    },
+                    "strength": 0.8,
+                    "awareness": 0.7,
+                    "conflicts_with": [
+                        {
+                            "value": {
+                                "name": "security",
+                                "description": "Feeling safe and stable"
+                            },
+                            "context": "when making big life decisions"
+                        }
+                    ]
+                }
+            ],
+            "patterns": [
+                {
+                    "pattern": {
+                        "id": "demo-pattern-1",
+                        "description": "Tends to overthink when facing uncertainty",
+                        "pattern_type": "cognitive",
+                        "frequency": "frequent"
+                    },
+                    "emotional_manifestations": [
+                        {
+                            "emotion": {
+                                "label": "anxiety"
+                            },
+                            "consistency": 0.8
+                        }
+                    ]
+                }
+            ],
+            "recent_persona_notes": [
+                {
+                    "id": "demo-note-1",
+                    "persona": "Sage",
+                    "note_type": "gentle_question",
+                    "content": "This reflection carries ambivalence. What feels most important to explore?",
+                    "created_at": "2024-06-02T16:45:00Z"
                 }
             ]
         }
@@ -211,17 +276,4 @@ async def _validate_and_apply_reflection_update(user_id: str, data: Dict[str, An
     
     # TODO: Implement reflection update in Neo4j
     logger.info(f"Reflection update validated for user {user_id} (Neo4j implementation pending)")
-    return True
-
-
-# Neo4j connection utilities (to be implemented)
-async def _get_neo4j_session():
-    """Get Neo4j database session."""
-    # TODO: Implement Neo4j connection
-    pass
-
-
-async def _execute_neo4j_query(query: str, parameters: Dict[str, Any] = None):
-    """Execute a Neo4j query with parameters."""
-    # TODO: Implement Neo4j query execution
-    pass 
+    return True 

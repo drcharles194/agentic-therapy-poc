@@ -24,9 +24,11 @@ const ChatPage: React.FC = () => {
   // Load memory data when the component mounts
   useEffect(() => {
     const loadMemory = async () => {
+      console.log('Loading initial memory for user:', userId)
       try {
         const memory = await apiClient.getMemory(userId)
         setMemoryData(memory)
+        console.log('Initial memory loaded successfully for user:', userId)
       } catch (error) {
         console.log('Memory not found for new user:', userId)
         // This is expected for new users, so we don't set an error
@@ -68,8 +70,10 @@ const ChatPage: React.FC = () => {
 
       // Refresh memory data after the conversation
       try {
+        console.log('Refreshing memory after message for user:', userId)
         const updatedMemory = await apiClient.getMemory(userId)
         setMemoryData(updatedMemory)
+        console.log('Memory refreshed successfully after message for user:', userId)
       } catch (memoryError) {
         console.log('Could not update memory:', memoryError)
       }
@@ -86,14 +90,18 @@ const ChatPage: React.FC = () => {
   }
 
   const handleViewMemory = async () => {
-    try {
-      const memory = await apiClient.getMemory(userId)
-      setMemoryData(memory)
-      setIsMemorySidebarOpen(true)
-    } catch (error) {
-      console.error('Error loading memory:', error)
-      setError('Failed to load memory data')
+    // Only fetch memory if we don't already have it
+    if (!memoryData) {
+      try {
+        const memory = await apiClient.getMemory(userId)
+        setMemoryData(memory)
+      } catch (error) {
+        console.error('Error loading memory:', error)
+        setError('Failed to load memory data')
+        return
+      }
     }
+    setIsMemorySidebarOpen(true)
   }
 
   return (
