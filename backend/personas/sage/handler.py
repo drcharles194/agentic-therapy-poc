@@ -7,6 +7,7 @@ from jinja2 import Template
 from pathlib import Path
 
 from backend.personas.sage.memory import get_user_context
+from backend.services.anthropic_service import anthropic_service
 from backend.config import settings
 
 logger = logging.getLogger(__name__)
@@ -82,9 +83,8 @@ Respond with warmth and gentle curiosity. Help them explore what's beneath the s
             
             logger.debug(f"Rendered prompt for user {user_id}: {rendered_prompt[:100]}...")
             
-            # TODO: Integrate with LangChain + Anthropic Claude
-            # For now, return a simple Sage-like response
-            response = self._generate_mock_sage_response(user_message, user_context)
+            # Use Anthropic service to generate response
+            response = await anthropic_service.generate_sage_response(rendered_prompt, user_message)
             
             logger.info(f"Generated Sage response for user {user_id}")
             return response
@@ -93,35 +93,6 @@ Respond with warmth and gentle curiosity. Help them explore what's beneath the s
             logger.error(f"Error generating Sage response for user {user_id}: {e}")
             # Fallback response
             return "I'm here with you. Sometimes words feel hard to find, and that's okay too."
-    
-    def _generate_mock_sage_response(self, user_message: str, user_context: Dict[str, Any]) -> str:
-        """Generate a mock Sage response until LangChain integration is complete."""
-        
-        # Simple response patterns based on message content
-        message_lower = user_message.lower()
-        
-        if any(word in message_lower for word in ['overwhelmed', 'stressed', 'anxious']):
-            return ("That sounds like a lot to carry right now. "
-                   "What would it feel like to set one small thing down, just for a moment?")
-        
-        elif any(word in message_lower for word in ['sad', 'sadness', 'grief', 'loss']):
-            return ("I can feel the weight of that sadness. "
-                   "Sadness often holds such important truths. What is yours telling you?")
-        
-        elif any(word in message_lower for word in ['stuck', 'trapped', 'can\'t move']):
-            return ("Being stuck can feel so heavy. Sometimes the way forward "
-                   "isn't about moving at all, but about understanding what's holding us. "
-                   "What do you sense beneath that stuckness?")
-        
-        elif any(word in message_lower for word in ['angry', 'frustrated', 'mad']):
-            return ("That anger has something to say. Anger often protects something tender underneath. "
-                   "What might it be guarding for you?")
-        
-        else:
-            # General reflective response
-            return (f"I hear you saying: '{user_message}'. "
-                   "That sounds like something that carries weight for you. "
-                   "Would you like to explore what's beneath the surface?")
 
 
 # Global instance
