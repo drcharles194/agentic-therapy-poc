@@ -26,8 +26,8 @@ class AnthropicService:
             if settings.anthropic_api_key and settings.anthropic_api_key != "test_key":
                 self.client = ChatAnthropic(
                     anthropic_api_key=settings.anthropic_api_key,
-                    model="claude-3-5-sonnet-20241022",  # Superior emotional intelligence for therapy
-                    max_tokens=500,  # Allow for more nuanced therapeutic responses
+                    model="claude-sonnet-4",  # Latest Claude 4 with enhanced reasoning and steerability
+                    max_tokens=500,  # Allow for more nuanced therapeutic responses  
                     temperature=0.8,  # Slightly higher for more natural conversation
                 )
                 logger.info("Anthropic Claude client initialized")
