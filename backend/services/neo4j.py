@@ -78,13 +78,13 @@ class Neo4jService:
     
     async def get_user_memory(self, user_id: str) -> Dict[str, Any]:
         """Retrieve comprehensive user memory for Sage persona."""
-        query = """
+        # Main query without nested collections
+        main_query = """
         MATCH (u:User {user_id: $user_id})
         
-        // Get reflections with persona notes
+        // Get reflections
         OPTIONAL MATCH (u)-[:HAS_REFLECTION]->(r:Reflection)
         WHERE NOT r.archived
-        OPTIONAL MATCH (r)-[:HAS_NOTE]->(pn:PersonaNote {persona: 'Sage'})
         
         // Get emotions
         OPTIONAL MATCH (u)-[:EXPERIENCED_EMOTION]->(e:Emotion)
@@ -105,14 +105,7 @@ class Neo4jService:
                    archived: r.archived,
                    source: r.source,
                    agent_origin: r.agent_origin,
-                   user_id: r.user_id,
-                   persona_notes: collect(DISTINCT {
-                       persona: pn.persona,
-                       type: pn.type,
-                       content: pn.content,
-                       created_at: pn.created_at,
-                       user_id: pn.user_id
-                   })
+                   user_id: r.user_id
                }) as reflections,
                collect(DISTINCT {
                    label: e.label,
@@ -132,8 +125,24 @@ class Neo4jService:
                }) as contradictions
         """
         
+        # Separate query for persona notes
+        persona_notes_query = """
+        MATCH (u:User {user_id: $user_id})
+        MATCH (u)-[:HAS_REFLECTION]->(r:Reflection)
+        MATCH (r)-[:HAS_NOTE]->(pn:PersonaNote {persona: 'Sage'})
+        RETURN r.id as reflection_id,
+               collect({
+                   persona: pn.persona,
+                   type: pn.type,
+                   content: pn.content,
+                   created_at: pn.created_at,
+                   user_id: pn.user_id
+               }) as persona_notes
+        """
+        
         async with self.get_session() as session:
-            result = await session.run(query, user_id=user_id)
+            # Execute main query
+            result = await session.run(main_query, user_id=user_id)
             record = await result.single()
             
             if not record:
@@ -150,12 +159,30 @@ class Neo4jService:
                     }
                 }
             
+            # Execute persona notes query
+            persona_result = await session.run(persona_notes_query, user_id=user_id)
+            persona_records = await persona_result.data()
+            
+            # Build persona notes lookup
+            persona_notes_by_reflection = {}
+            for p_record in persona_records:
+                reflection_id = p_record["reflection_id"]
+                persona_notes_by_reflection[reflection_id] = p_record["persona_notes"]
+            
+            # Build reflections with persona notes
+            reflections = []
+            for r in record["reflections"]:
+                if r["id"] is not None:
+                    reflection = dict(r)
+                    reflection["persona_notes"] = persona_notes_by_reflection.get(r["id"], [])
+                    reflections.append(reflection)
+            
             # Convert Neo4j record to expected format
             return {
                 "user_id": record["user_id"],
                 "user_name": record["user_name"],
                 "sage": {
-                    "reflections": [r for r in record["reflections"] if r["id"] is not None],
+                    "reflections": reflections,
                     "emotions": [e for e in record["emotions"] if e["label"] is not None],
                     "self_kindness_events": [sk for sk in record["self_kindness_events"] if sk["description"] is not None],
                     "contradictions": [c for c in record["contradictions"] if c["summary"] is not None]
@@ -223,6 +250,166 @@ class Neo4jService:
             return {"status": "healthy", "message": "Connected"}
         except Exception as e:
             return {"status": "unhealthy", "message": str(e)}
+
+    async def add_reflection(self, user_id: str, reflection_data: Dict[str, Any]) -> bool:
+        """Add a reflection to user's memory."""
+        query = """
+        MATCH (u:User {user_id: $user_id})
+        
+        CREATE (r:Reflection {
+            id: $id,
+            content: $content,
+            timestamp: $timestamp,
+            archived: $archived,
+            source: $source,
+            agent_origin: $agent_origin,
+            user_id: $user_id
+        })
+        
+        CREATE (u)-[:HAS_REFLECTION]->(r)
+        
+        RETURN r.id as reflection_id
+        """
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.run(
+                    query,
+                    user_id=user_id,
+                    id=reflection_data["id"],
+                    content=reflection_data["content"],
+                    timestamp=reflection_data["timestamp"],
+                    archived=reflection_data.get("archived", False),
+                    source=reflection_data.get("source", "user"),
+                    agent_origin=reflection_data.get("agent_origin"),
+                )
+                await result.single()
+                logger.info(f"Added reflection for user {user_id}: {reflection_data['id']}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to add reflection: {e}")
+            return False
+
+    async def add_emotion(self, user_id: str, emotion_data: Dict[str, Any]) -> bool:
+        """Add an emotion observation to user's memory."""
+        query = """
+        MATCH (u:User {user_id: $user_id})
+        
+        CREATE (e:Emotion {
+            label: $label,
+            intensity: $intensity,
+            timestamp: $timestamp,
+            archived_at: $archived_at,
+            user_id: $user_id
+        })
+        
+        CREATE (u)-[:EXPERIENCED_EMOTION]->(e)
+        
+        RETURN e.label as emotion_label
+        """
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.run(
+                    query,
+                    user_id=user_id,
+                    label=emotion_data["label"],
+                    intensity=emotion_data.get("intensity", 0.5),
+                    timestamp=emotion_data["timestamp"],
+                    archived_at=emotion_data.get("archived_at")
+                )
+                await result.single()
+                logger.info(f"Added emotion for user {user_id}: {emotion_data['label']}")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to add emotion: {e}")
+            return False
+
+    async def add_self_kindness_event(self, user_id: str, kindness_data: Dict[str, Any]) -> bool:
+        """Add a self-kindness event to user's memory."""
+        query = """
+        MATCH (u:User {user_id: $user_id})
+        
+        CREATE (sk:SelfKindness {
+            description: $description,
+            timestamp: $timestamp,
+            user_id: $user_id
+        })
+        
+        CREATE (u)-[:PRACTICED_KINDNESS]->(sk)
+        
+        RETURN sk.description as kindness_description
+        """
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.run(
+                    query,
+                    user_id=user_id,
+                    description=kindness_data["description"],
+                    timestamp=kindness_data["timestamp"]
+                )
+                await result.single()
+                logger.info(f"Added self-kindness event for user {user_id}: {kindness_data['description'][:50]}...")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to add self-kindness event: {e}")
+            return False
+
+    async def add_contradiction(self, user_id: str, contradiction_data: Dict[str, Any]) -> bool:
+        """Add a value contradiction to user's memory."""
+        query = """
+        MATCH (u:User {user_id: $user_id})
+        
+        CREATE (c:Contradiction {
+            summary: $summary,
+            details: $details,
+            user_id: $user_id
+        })
+        
+        CREATE (u)-[:HAS_CONTRADICTION]->(c)
+        
+        RETURN c.summary as contradiction_summary
+        """
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.run(
+                    query,
+                    user_id=user_id,
+                    summary=contradiction_data["summary"],
+                    details=contradiction_data.get("details", "")
+                )
+                await result.single()
+                logger.info(f"Added contradiction for user {user_id}: {contradiction_data['summary'][:50]}...")
+                return True
+        except Exception as e:
+            logger.error(f"Failed to add contradiction: {e}")
+            return False
+
+    async def process_memory_proposal(self, user_id: str, proposal: Dict[str, Any]) -> bool:
+        """Process a memory update proposal from the intelligent system."""
+        update_type = proposal.get("update_type")
+        data = proposal.get("data", {})
+        
+        try:
+            if update_type == "reflection":
+                return await self.add_reflection(user_id, data)
+            elif update_type == "emotion":
+                return await self.add_emotion(user_id, data)
+            elif update_type == "self_kindness":
+                return await self.add_self_kindness_event(user_id, data)
+            elif update_type == "contradiction":
+                return await self.add_contradiction(user_id, data)
+            elif update_type == "persona_note":
+                return await self.add_persona_note(user_id, data["reflection_id"], data)
+            else:
+                logger.warning(f"Unknown memory proposal type: {update_type}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"Failed to process memory proposal {update_type}: {e}")
+            return False
 
 
 # Global service instance
