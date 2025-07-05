@@ -12,6 +12,8 @@ from starlette.exceptions import HTTPException
 from backend.config import settings
 from backend.models.schema import ErrorResponse
 from backend.routers import chat
+from backend.services.neo4j import neo4j_service
+from backend.services.anthropic_service import anthropic_service
 
 
 # Configure logging
@@ -26,8 +28,34 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan context manager."""
     logger.info(f"Starting {settings.app_name} v{settings.app_version}")
+    
+    # Initialize services
+    try:
+        logger.info("Initializing Neo4j service...")
+        await neo4j_service.connect()
+        logger.info("Neo4j service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Neo4j service: {e}")
+        logger.warning("Neo4j service will fall back to mock responses")
+    
+    try:
+        logger.info("Initializing Anthropic service...")
+        # Anthropic service initializes in constructor, just log status
+        model_info = anthropic_service.get_model_info()
+        logger.info(f"Anthropic service status: {model_info}")
+    except Exception as e:
+        logger.error(f"Failed to initialize Anthropic service: {e}")
+        logger.warning("Anthropic service will fall back to mock responses")
+    
     yield
+    
+    # Cleanup services
     logger.info("Shutting down application")
+    try:
+        await neo4j_service.disconnect()
+        logger.info("Neo4j service disconnected")
+    except Exception as e:
+        logger.error(f"Error disconnecting Neo4j service: {e}")
 
 
 # Create FastAPI application

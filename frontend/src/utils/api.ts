@@ -22,22 +22,44 @@ export interface MemoryData {
   user_id: string
   user_name: string
   sage: {
+    moments: Array<{
+      id: string
+      timestamp: string
+      context: string
+      session_id: string
+    }>
+    emotions: Array<{
+      id: string
+      label: string
+      intensity: number
+      nuance?: string
+      bodily_sensation?: string
+    }>
     reflections: Array<{
       id: string
       content: string
-      timestamp: string
+      insight_type: string
+      depth_level: number
+      confidence: number
     }>
-    emotions: Array<{
-      label: string
-      intensity: number
-      timestamp: string
-    }>
-    self_kindness_events: Array<{
+    values: Array<{
+      id: string
+      name: string
       description: string
-      timestamp: string
+      importance: number
     }>
-    contradictions: Array<{
-      summary: string
+    patterns: Array<{
+      id: string
+      description: string
+      pattern_type: string
+      frequency: string
+    }>
+    notes: Array<{
+      id: string
+      persona: string
+      note_type: string
+      content: string
+      created_at: string
     }>
   }
 }
