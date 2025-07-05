@@ -6,7 +6,7 @@ from typing import Dict, Any, Optional
 
 from langchain_anthropic import ChatAnthropic
 from langchain.schema import HumanMessage, SystemMessage
-from langchain.callbacks import get_openai_callback
+from langchain_community.callbacks.manager import get_openai_callback
 
 from backend.config import settings
 
@@ -26,7 +26,7 @@ class AnthropicService:
             if settings.anthropic_api_key and settings.anthropic_api_key != "test_key":
                 self.client = ChatAnthropic(
                     anthropic_api_key=settings.anthropic_api_key,
-                    model="claude-sonnet-4",  # Latest Claude 4 with enhanced reasoning and steerability
+                    model="claude-sonnet-4-20250514",  # Correct Claude 4 Sonnet model name
                     max_tokens=500,  # Allow for more nuanced therapeutic responses  
                     temperature=0.8,  # Slightly higher for more natural conversation
                 )
