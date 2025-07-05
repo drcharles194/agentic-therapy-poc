@@ -1,5 +1,6 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { PersonaPanel, MessageBubble, MemorySidebar } from '../components'
+import { apiClient, type MemoryData } from '../utils/api'
 
 const ChatPage: React.FC = () => {
   const [messages, setMessages] = useState<Array<{
@@ -9,6 +10,10 @@ const ChatPage: React.FC = () => {
     timestamp: Date
   }>>([])
   const [isMemorySidebarOpen, setIsMemorySidebarOpen] = useState(false)
+  const [memoryData, setMemoryData] = useState<MemoryData | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [userId] = useState(() => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
 
   const sagePersona = {
     name: 'Sage',
@@ -16,26 +21,79 @@ const ChatPage: React.FC = () => {
     description: 'A compassionate guide offering gentle wisdom and therapeutic support'
   }
 
-  const handleSendMessage = (content: string) => {
-    // Add user message
-    const newMessage = {
+  // Load memory data when the component mounts
+  useEffect(() => {
+    const loadMemory = async () => {
+      try {
+        const memory = await apiClient.getMemory(userId)
+        setMemoryData(memory)
+      } catch (error) {
+        console.log('Memory not found for new user:', userId)
+        // This is expected for new users, so we don't set an error
+      }
+    }
+    loadMemory()
+  }, [userId])
+
+  const handleSendMessage = async (content: string) => {
+    if (isLoading) return
+    
+    setError(null)
+    setIsLoading(true)
+
+    // Add user message immediately
+    const userMessage = {
       id: Date.now().toString(),
       content,
       sender: 'user' as const,
       timestamp: new Date()
     }
-    setMessages(prev => [...prev, newMessage])
-    
-    // Simulate Sage response (will be replaced with actual API call)
-    setTimeout(() => {
+    setMessages(prev => [...prev, userMessage])
+
+    try {
+      // Call the backend API
+      const response = await apiClient.sendMessage({
+        message: content,
+        user_id: userId
+      })
+
+      // Add Sage response
       const sageResponse = {
         id: (Date.now() + 1).toString(),
-        content: `I hear you saying: "${content}". That sounds like something that carries weight for you. Would you like to explore what's beneath the surface?`,
+        content: response.persona_response,
         sender: 'sage' as const,
         timestamp: new Date()
       }
       setMessages(prev => [...prev, sageResponse])
-    }, 1000)
+
+      // Refresh memory data after the conversation
+      try {
+        const updatedMemory = await apiClient.getMemory(userId)
+        setMemoryData(updatedMemory)
+      } catch (memoryError) {
+        console.log('Could not update memory:', memoryError)
+      }
+
+    } catch (error) {
+      setError('Failed to send message. Please try again.')
+      console.error('Error sending message:', error)
+      
+      // Remove the user message on error
+      setMessages(prev => prev.filter(msg => msg.id !== userMessage.id))
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleViewMemory = async () => {
+    try {
+      const memory = await apiClient.getMemory(userId)
+      setMemoryData(memory)
+      setIsMemorySidebarOpen(true)
+    } catch (error) {
+      console.error('Error loading memory:', error)
+      setError('Failed to load memory data')
+    }
   }
 
   return (
@@ -48,13 +106,27 @@ const ChatPage: React.FC = () => {
               Agentic Therapy
             </h1>
             <button
-              onClick={() => setIsMemorySidebarOpen(true)}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700"
+              onClick={handleViewMemory}
+              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
+              disabled={isLoading}
             >
               View Memory
             </button>
           </div>
         </header>
+
+        {/* Error Message */}
+        {error && (
+          <div className="mx-4 mt-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-md">
+            {error}
+            <button
+              onClick={() => setError(null)}
+              className="ml-2 text-red-500 hover:text-red-700"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Persona Panel */}
         <div className="p-4">
@@ -68,23 +140,37 @@ const ChatPage: React.FC = () => {
             {messages.length === 0 ? (
               <div className="text-center text-gray-500 mt-8">
                 <p>Start a conversation with Sage</p>
+                <p className="text-sm mt-2">Your unique ID: {userId}</p>
               </div>
             ) : (
               messages.map((message) => (
                 <MessageBubble key={message.id} message={message} />
               ))
             )}
+            
+            {/* Loading indicator */}
+            {isLoading && (
+              <div className="flex justify-start mb-4">
+                <div className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span className="text-sm">Sage is thinking...</span>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Message Input */}
           <div className="border-t bg-white p-4">
-            <MessageInput onSendMessage={handleSendMessage} />
+            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading} />
           </div>
         </div>
       </div>
 
       {/* Memory Sidebar */}
       <MemorySidebar
+        memoryData={memoryData}
         isOpen={isMemorySidebarOpen}
         onClose={() => setIsMemorySidebarOpen(false)}
       />
@@ -93,12 +179,15 @@ const ChatPage: React.FC = () => {
 }
 
 // Message Input Component
-const MessageInput: React.FC<{ onSendMessage: (message: string) => void }> = ({ onSendMessage }) => {
+const MessageInput: React.FC<{ 
+  onSendMessage: (message: string) => void
+  disabled?: boolean
+}> = ({ onSendMessage, disabled = false }) => {
   const [message, setMessage] = useState('')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (message.trim()) {
+    if (message.trim() && !disabled) {
       onSendMessage(message)
       setMessage('')
     }
@@ -111,11 +200,13 @@ const MessageInput: React.FC<{ onSendMessage: (message: string) => void }> = ({ 
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder="Type your message..."
-        className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        disabled={disabled}
       />
       <button
         type="submit"
-        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        disabled={disabled || !message.trim()}
       >
         Send
       </button>
