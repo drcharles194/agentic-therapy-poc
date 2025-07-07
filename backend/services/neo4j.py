@@ -560,7 +560,7 @@ class Neo4jService:
                 "user_id": user_id,
                 "moment_id": reflection_data["moment_id"],
                 "id": reflection_data["id"],
-                "content": reflection_data["content"],
+                "content": reflection_data.get("content", ""),
                 "insight_type": reflection_data.get("insight_type", "realization"),
                 "depth_level": reflection_data.get("depth_level", 1),
                 "confidence": reflection_data.get("confidence", 0.5),
@@ -576,6 +576,12 @@ class Neo4jService:
 
     async def add_complex_emotion(self, user_id: str, emotion_data: Dict[str, Any]) -> bool:
         """Add an emotion using the new complex schema."""
+        # VALIDATION: Ensure essential fields are present and meaningful
+        label = emotion_data.get("label", "").strip()
+        if not label or label.lower() in ["unknown", "unknown emotion"]:
+            logger.warning(f"Refusing to add emotion with invalid label for user {user_id}: '{label}'")
+            return False
+            
         query = """
         MATCH (u:User {user_id: $user_id})
         MATCH (m:Moment {id: $moment_id, user_id: $user_id})
@@ -600,7 +606,7 @@ class Neo4jService:
                 "user_id": user_id,
                 "moment_id": emotion_data["moment_id"],
                 "id": emotion_data["id"],
-                "label": emotion_data["label"],
+                "label": emotion_data.get("label", "unknown"),
                 "intensity": emotion_data.get("intensity", 0.5),
                 "nuance": emotion_data.get("nuance", ""),
                 "bodily_sensation": emotion_data.get("bodily_sensation", "unspecified"),
@@ -617,6 +623,12 @@ class Neo4jService:
 
     async def add_complex_contradiction(self, user_id: str, contradiction_data: Dict[str, Any]) -> bool:
         """Add a contradiction using the new complex schema."""
+        # VALIDATION: Ensure essential fields are present and meaningful
+        summary = contradiction_data.get("summary", "").strip()
+        if not summary or len(summary) < 5:
+            logger.warning(f"Refusing to add contradiction with insufficient summary for user {user_id}: '{summary}'")
+            return False
+            
         query = """
         MATCH (u:User {user_id: $user_id})
         MATCH (m:Moment {id: $moment_id, user_id: $user_id})
@@ -640,7 +652,7 @@ class Neo4jService:
                 "user_id": user_id,
                 "moment_id": contradiction_data["moment_id"],
                 "id": contradiction_data["id"],
-                "summary": contradiction_data["summary"],
+                "summary": contradiction_data.get("summary", ""),
                 "tension_type": contradiction_data.get("tension_type", "values"),
                 "intensity": contradiction_data.get("intensity", 0.5)
             },
@@ -654,6 +666,12 @@ class Neo4jService:
 
     async def add_complex_value(self, user_id: str, value_data: Dict[str, Any]) -> bool:
         """Add a value using the new complex schema."""
+        # VALIDATION: Ensure essential fields are present and meaningful
+        name = value_data.get("name", "").strip()
+        if not name or name.lower() in ["unnamed value"]:
+            logger.warning(f"Refusing to add value with invalid name for user {user_id}: '{name}'")
+            return False
+            
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -675,7 +693,7 @@ class Neo4jService:
             {
                 "user_id": user_id,
                 "id": value_data["id"],
-                "name": value_data["name"],
+                "name": value_data.get("name", ""),
                 "description": value_data.get("description", ""),
                 "importance": value_data.get("importance", 0.5),
                 "strength": value_data.get("strength", 0.5),
@@ -691,6 +709,12 @@ class Neo4jService:
 
     async def add_complex_pattern(self, user_id: str, pattern_data: Dict[str, Any]) -> bool:
         """Add a pattern using the new complex schema."""
+        # VALIDATION: Ensure essential fields are present and meaningful
+        description = pattern_data.get("description", "").strip()
+        if not description or len(description) < 10 or description.lower().startswith("pattern without"):
+            logger.warning(f"Refusing to add pattern with insufficient description for user {user_id}: '{description}'")
+            return False
+            
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -712,7 +736,7 @@ class Neo4jService:
             {
                 "user_id": user_id,
                 "id": pattern_data["id"],
-                "description": pattern_data["description"],
+                "description": pattern_data.get("description", ""),
                 "pattern_type": pattern_data.get("pattern_type", "behavioral"),
                 "frequency": pattern_data.get("frequency", "occasional")
             },
@@ -726,6 +750,12 @@ class Neo4jService:
 
     async def add_complex_persona_note(self, user_id: str, note_data: Dict[str, Any]) -> bool:
         """Add a persona note using the new complex schema."""
+        # VALIDATION: Ensure essential fields are present and meaningful
+        content = note_data.get("content", "").strip()
+        if not content or len(content) < 5:
+            logger.warning(f"Refusing to add persona note with insufficient content for user {user_id}: '{content}'")
+            return False
+            
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -755,9 +785,9 @@ class Neo4jService:
             {
                 "user_id": user_id,
                 "id": note_data["id"],
-                "persona": note_data["persona"],
+                "persona": note_data.get("persona", "Sage"),
                 "note_type": note_data.get("note_type", "observation"),
-                "content": note_data["content"],
+                "content": note_data.get("content", ""),
                 "emotion_id": note_data.get("emotion_id"),
                 "reflection_id": note_data.get("reflection_id")
             },

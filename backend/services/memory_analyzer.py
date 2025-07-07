@@ -63,7 +63,7 @@ class MemoryAnalyzer:
         # Build context strings
         emotion_context = ""
         if existing_emotions:
-            recent_emotions = [f"- {e['label']} ({e.get('intensity', 0.5):.1f})" for e in existing_emotions[-5:]]
+            recent_emotions = [f"- {e.get('label', 'Unknown emotion')} ({e.get('intensity', 0.5):.1f})" for e in existing_emotions[-5:]]
             emotion_context = f"""
 EXISTING EMOTIONS (last 5):
 {chr(10).join(recent_emotions)}
@@ -71,7 +71,7 @@ EXISTING EMOTIONS (last 5):
 
         reflection_context = ""
         if existing_reflections:
-            recent_reflections = [f"- {r['content'][:100]}..." for r in existing_reflections[-3:]]
+            recent_reflections = [f"- {r.get('content', 'Reflection without content')[:100]}..." for r in existing_reflections[-3:]]
             reflection_context = f"""
 EXISTING REFLECTIONS (last 3):
 {chr(10).join(recent_reflections)}
@@ -79,7 +79,7 @@ EXISTING REFLECTIONS (last 3):
 
         values_context = ""
         if existing_values:
-            recent_values = [f"- {v['name']}: {v.get('description', '')[:60]}..." for v in existing_values[-3:]]
+            recent_values = [f"- {v.get('name', 'Unnamed value')}: {v.get('description', '')[:60]}..." for v in existing_values[-3:]]
             values_context = f"""
 EXISTING VALUES (last 3):
 {chr(10).join(recent_values)}
@@ -87,7 +87,7 @@ EXISTING VALUES (last 3):
 
         patterns_context = ""
         if existing_patterns:
-            recent_patterns = [f"- {p['description'][:80]}..." for p in existing_patterns[-3:]]
+            recent_patterns = [f"- {p.get('description', 'Pattern without description')[:80]}..." for p in existing_patterns[-3:]]
             patterns_context = f"""
 EXISTING PATTERNS (last 3):
 {chr(10).join(recent_patterns)}
@@ -95,7 +95,7 @@ EXISTING PATTERNS (last 3):
 
         contradiction_context = ""
         if existing_contradictions:
-            recent_contradictions = [f"- {c['summary'][:80]}..." for c in existing_contradictions[-3:]]
+            recent_contradictions = [f"- {c.get('summary', 'Contradiction without summary')[:80]}..." for c in existing_contradictions[-3:]]
             contradiction_context = f"""
 EXISTING CONTRADICTIONS:
 {chr(10).join(recent_contradictions)}
@@ -135,13 +135,38 @@ Review this conversation and identify ONLY NEW content worth storing:
 - Use clinical but compassionate language
 - Avoid raw quotes; use descriptive, professional phrasing
 
-Only propose storing content that is:
+### EMOTIONS (if any)  
+- Must be specific emotions with clear evidence
+- Include precise intensity (0.1-1.0) based on user's words
+- Example: "anxiety" with intensity 0.8 because user said "I'm terrified of making the wrong choice"
+- NOT generic emotions without supporting evidence
+
+### VALUES (if any)
+- Must be core values explicitly expressed or clearly implied
+- Include specific description of what this value means to the user
+- Example: "family" - "Being present and supportive for my children is my highest priority"
+- NOT inferred values without clear evidence
+
+### PATTERNS (if any)
+- Must be recurring behaviors/thoughts with specific description
+- Include frequency and clear behavioral description
+- Example: "I consistently avoid difficult conversations by changing the subject or making jokes, especially when emotions get intense"
+- NOT vague patterns like "avoids things" or "gets stressed"
+
+### CONTRADICTIONS (if any)
+- Must show clear tension between two specific values/desires
+- Include detailed explanation of the conflict
+- Example: "Wants independence but constantly seeks approval from others for major decisions"
+- NOT general conflicts without specifics
+
+**STRICT RULES:**
+- If you cannot provide substantial, meaningful content for a category, DO NOT include it
+- Empty or minimal responses will be rejected
+- Be selective - quality over quantity
+- Only store content that adds genuine therapeutic value beyond what's already known
 - Explicitly expressed by the user (not inferred)
 - Genuinely NEW or significantly different from existing memories
-- Meaningful enough to inform future therapeutic conversations
 - Respectful of the user's privacy and autonomy
-
-IMPORTANT: Be highly selective. With existing memory context, most conversations may not need any new storage. Only store content that adds genuine therapeutic value beyond what's already known.
 
 Respond in this exact JSON format:
 {{
@@ -182,8 +207,8 @@ Respond in this exact JSON format:
   ],
   "contradictions": [
     {{
-      "summary": "brief description of the value tension",
-      "details": "the conflicting desires/beliefs expressed",
+      "summary": "clear description of the value tension",
+      "details": "detailed explanation of the conflicting desires/beliefs",
       "why_new": "why this tension is different from existing contradictions"
     }}
   ],
