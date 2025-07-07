@@ -239,6 +239,20 @@ Respond in this exact JSON format:
                     clean_response = re.sub(r'^```\s*', '', clean_response)
                 
                 analysis_data = json.loads(clean_response.strip())
+                
+                # Debug log the structure for troubleshooting
+                logger.debug(f"Claude analysis keys for user {user_id}: {list(analysis_data.keys())}")
+                if analysis_data.get("should_store"):
+                    counts = {
+                        "moments": 1,  # Always create one moment
+                        "reflections": len(analysis_data.get("reflections", [])),
+                        "emotions": len(analysis_data.get("emotions", [])),
+                        "values": len(analysis_data.get("values", [])),
+                        "patterns": len(analysis_data.get("patterns", [])),
+                        "contradictions": len(analysis_data.get("contradictions", []))
+                    }
+                    logger.debug(f"Claude proposed memory counts for user {user_id}: {counts}")
+                    
             except json.JSONDecodeError as e:
                 logger.warning(f"Failed to parse analysis JSON: {e}. Raw response: {analysis_response[:200]}...")
                 return {"should_store": False, "reasoning": "Failed to parse analysis"}
@@ -306,12 +320,17 @@ Respond in this exact JSON format:
         
         # Create reflection proposals with new schema
         for reflection in analysis.get("reflections", []):
+            # Skip if missing essential content
+            if not reflection.get("content"):
+                logger.warning(f"Skipping reflection proposal with missing content for user {user_id}")
+                continue
+                
             reflection_id = str(uuid.uuid4())
             proposals.append({
                 "update_type": "reflection",
                 "data": {
                     "id": reflection_id,
-                    "content": reflection["content"],
+                    "content": reflection.get("content", ""),
                     "insight_type": "realization",
                     "depth_level": 2,  # Therapist-validated insights are deeper
                     "confidence": 0.8,  # High confidence from Claude analysis
@@ -337,11 +356,16 @@ Respond in this exact JSON format:
         
         # Create emotion proposals with new schema
         for emotion in analysis.get("emotions", []):
+            # Skip if missing essential label
+            if not emotion.get("label"):
+                logger.warning(f"Skipping emotion proposal with missing label for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "emotion",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "label": emotion["label"],
+                    "label": emotion.get("label", "unknown"),
                     "intensity": emotion.get("intensity", 0.5),
                     "nuance": emotion.get("evidence", "Detected in therapeutic conversation"),
                     "bodily_sensation": "unspecified",
@@ -352,11 +376,16 @@ Respond in this exact JSON format:
         
         # Create contradiction proposals with new schema
         for contradiction in analysis.get("contradictions", []):
+            # Skip if missing essential summary
+            if not contradiction.get("summary"):
+                logger.warning(f"Skipping contradiction proposal with missing summary for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "contradiction",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "summary": contradiction["summary"],
+                    "summary": contradiction.get("summary", ""),
                     "tension_type": "values",  # Default to values tension
                     "intensity": 0.6,  # Medium intensity by default
                     "user_id": user_id,
@@ -367,11 +396,16 @@ Respond in this exact JSON format:
         
         # Create value proposals with new schema
         for value in analysis.get("values", []):
+            # Skip if missing essential name
+            if not value.get("name"):
+                logger.warning(f"Skipping value proposal with missing name for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "value",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "name": value["name"],
+                    "name": value.get("name", ""),
                     "description": value.get("description", ""),
                     "importance": value.get("importance", 0.7),
                     "strength": 0.8,  # New values are typically strongly held
@@ -383,11 +417,16 @@ Respond in this exact JSON format:
         
         # Create pattern proposals with new schema
         for pattern in analysis.get("patterns", []):
+            # Skip if missing essential description
+            if not pattern.get("description"):
+                logger.warning(f"Skipping pattern proposal with missing description for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "pattern",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "description": pattern["description"],
+                    "description": pattern.get("description", ""),
                     "pattern_type": pattern.get("pattern_type", "behavioral"),
                     "frequency": pattern.get("frequency", "occasional"),
                     "user_id": user_id,
