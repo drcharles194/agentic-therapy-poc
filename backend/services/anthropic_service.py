@@ -6,7 +6,6 @@ from typing import Dict, Any, Optional
 
 from langchain_anthropic import ChatAnthropic
 from langchain.schema import HumanMessage, SystemMessage
-from langchain_community.callbacks.manager import get_openai_callback
 
 from backend.config import settings
 
@@ -60,12 +59,8 @@ class AnthropicService:
                 HumanMessage(content=user_message)
             ]
             
-            # Generate response with token tracking
-            with get_openai_callback() as cb:
-                response = await self.client.agenerate([messages])
-                
-                # Log token usage
-                logger.info(f"Claude API call - Tokens: {cb.total_tokens}, Cost: ~${cb.total_cost:.4f}")
+            # Generate response
+            response = await self.client.agenerate([messages])
             
             # Extract the response text
             sage_response = response.generations[0][0].text.strip()
@@ -73,7 +68,11 @@ class AnthropicService:
             # Ensure response follows Sage guidelines
             sage_response = self._ensure_sage_tone(sage_response)
             
+            # Log successful API call (tokens not available from LangChain Anthropic)
+            total_chars = len(rendered_prompt) + len(user_message) + len(sage_response)
+            logger.info(f"Claude API call - Input: {len(rendered_prompt + user_message)} chars, Output: {len(sage_response)} chars")
             logger.info(f"Generated Sage response via Claude API ({len(sage_response)} chars)")
+            
             return sage_response
             
         except Exception as e:
