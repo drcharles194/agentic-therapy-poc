@@ -21,58 +21,8 @@ class MemoryAnalyzer:
     """Analyzes conversations to propose intelligent memory updates."""
     
     def __init__(self):
-        self.analysis_prompt_template = """
-You are a memory analyst for the Sage therapeutic AI system. Your job is to analyze conversations and identify what's worth storing in the user's memory graph.
-
-Review this conversation and identify:
-
-1. **REFLECTIONS**: Deep insights, realizations, or meaningful thoughts from the user that reveal something important about their inner world
-2. **EMOTIONS**: Clear emotional states expressed by the user (not assumptions)  
-3. **SELF-KINDNESS**: Moments where the user was compassionate to themselves
-4. **CONTRADICTIONS**: Value tensions or conflicting desires/beliefs the user expressed
-
-Only propose storing content that is:
-- Explicitly expressed by the user (not inferred)
-- Meaningful enough to inform future therapeutic conversations
-- Respectful of the user's privacy and autonomy
-
-User Message: "{user_message}"
-Sage Response: "{sage_response}"
-
-IMPORTANT: Be selective. Not every conversation needs memory storage. Only store content that would genuinely help Sage provide better therapeutic support in future conversations.
-
-Respond in this exact JSON format:
-{{
-  "should_store": true/false,
-  "reflections": [
-    {{
-      "content": "user's exact words or paraphrased insight",
-      "significance": "why this reflection is therapeutically valuable",
-      "source": "user"
-    }}
-  ],
-  "emotions": [
-    {{
-      "label": "anxiety/sadness/joy/etc",
-      "intensity": 0.1-1.0,
-      "evidence": "what in their words suggests this emotion"
-    }}
-  ],
-  "self_kindness_events": [
-    {{
-      "description": "specific self-compassionate action or thought",
-      "evidence": "user's words that show this"
-    }}
-  ],
-  "contradictions": [
-    {{
-      "summary": "brief description of the value tension",
-      "details": "the conflicting desires/beliefs expressed"
-    }}
-  ],
-  "reasoning": "brief explanation of storage decisions"
-}}
-"""
+        """Initialize the MemoryAnalyzer."""
+        pass
 
     def _extract_moment_context(self, user_message: str) -> str:
         """Extract meaningful context from user message for moment description."""
@@ -113,7 +63,7 @@ Respond in this exact JSON format:
         # Build context strings
         emotion_context = ""
         if existing_emotions:
-            recent_emotions = [f"- {e['label']} ({e.get('intensity', 0.5):.1f})" for e in existing_emotions[-5:]]
+            recent_emotions = [f"- {e.get('label', 'Unknown emotion')} ({e.get('intensity', 0.5):.1f})" for e in existing_emotions[-5:]]
             emotion_context = f"""
 EXISTING EMOTIONS (last 5):
 {chr(10).join(recent_emotions)}
@@ -121,7 +71,7 @@ EXISTING EMOTIONS (last 5):
 
         reflection_context = ""
         if existing_reflections:
-            recent_reflections = [f"- {r['content'][:100]}..." for r in existing_reflections[-3:]]
+            recent_reflections = [f"- {r.get('content', 'Reflection without content')[:100]}..." for r in existing_reflections[-3:]]
             reflection_context = f"""
 EXISTING REFLECTIONS (last 3):
 {chr(10).join(recent_reflections)}
@@ -129,7 +79,7 @@ EXISTING REFLECTIONS (last 3):
 
         values_context = ""
         if existing_values:
-            recent_values = [f"- {v['name']}: {v.get('description', '')[:60]}..." for v in existing_values[-3:]]
+            recent_values = [f"- {v.get('name', 'Unnamed value')}: {v.get('description', '')[:60]}..." for v in existing_values[-3:]]
             values_context = f"""
 EXISTING VALUES (last 3):
 {chr(10).join(recent_values)}
@@ -137,7 +87,7 @@ EXISTING VALUES (last 3):
 
         patterns_context = ""
         if existing_patterns:
-            recent_patterns = [f"- {p['description'][:80]}..." for p in existing_patterns[-3:]]
+            recent_patterns = [f"- {p.get('description', 'Pattern without description')[:80]}..." for p in existing_patterns[-3:]]
             patterns_context = f"""
 EXISTING PATTERNS (last 3):
 {chr(10).join(recent_patterns)}
@@ -145,7 +95,7 @@ EXISTING PATTERNS (last 3):
 
         contradiction_context = ""
         if existing_contradictions:
-            recent_contradictions = [f"- {c['summary'][:80]}..." for c in existing_contradictions[-3:]]
+            recent_contradictions = [f"- {c.get('summary', 'Contradiction without summary')[:80]}..." for c in existing_contradictions[-3:]]
             contradiction_context = f"""
 EXISTING CONTRADICTIONS:
 {chr(10).join(recent_contradictions)}
@@ -185,13 +135,38 @@ Review this conversation and identify ONLY NEW content worth storing:
 - Use clinical but compassionate language
 - Avoid raw quotes; use descriptive, professional phrasing
 
-Only propose storing content that is:
+### EMOTIONS (if any)  
+- Must be specific emotions with clear evidence
+- Include precise intensity (0.1-1.0) based on user's words
+- Example: "anxiety" with intensity 0.8 because user said "I'm terrified of making the wrong choice"
+- NOT generic emotions without supporting evidence
+
+### VALUES (if any)
+- Must be core values explicitly expressed or clearly implied
+- Include specific description of what this value means to the user
+- Example: "family" - "Being present and supportive for my children is my highest priority"
+- NOT inferred values without clear evidence
+
+### PATTERNS (if any)
+- Must be recurring behaviors/thoughts with specific description
+- Include frequency and clear behavioral description
+- Example: "I consistently avoid difficult conversations by changing the subject or making jokes, especially when emotions get intense"
+- NOT vague patterns like "avoids things" or "gets stressed"
+
+### CONTRADICTIONS (if any)
+- Must show clear tension between two specific values/desires
+- Include detailed explanation of the conflict
+- Example: "Wants independence but constantly seeks approval from others for major decisions"
+- NOT general conflicts without specifics
+
+**STRICT RULES:**
+- If you cannot provide substantial, meaningful content for a category, DO NOT include it
+- Empty or minimal responses will be rejected
+- Be selective - quality over quantity
+- Only store content that adds genuine therapeutic value beyond what's already known
 - Explicitly expressed by the user (not inferred)
 - Genuinely NEW or significantly different from existing memories
-- Meaningful enough to inform future therapeutic conversations
 - Respectful of the user's privacy and autonomy
-
-IMPORTANT: Be highly selective. With existing memory context, most conversations may not need any new storage. Only store content that adds genuine therapeutic value beyond what's already known.
 
 Respond in this exact JSON format:
 {{
@@ -232,8 +207,8 @@ Respond in this exact JSON format:
   ],
   "contradictions": [
     {{
-      "summary": "brief description of the value tension",
-      "details": "the conflicting desires/beliefs expressed",
+      "summary": "clear description of the value tension",
+      "details": "detailed explanation of the conflicting desires/beliefs",
       "why_new": "why this tension is different from existing contradictions"
     }}
   ],
@@ -289,6 +264,20 @@ Respond in this exact JSON format:
                     clean_response = re.sub(r'^```\s*', '', clean_response)
                 
                 analysis_data = json.loads(clean_response.strip())
+                
+                # Debug log the structure for troubleshooting
+                logger.debug(f"Claude analysis keys for user {user_id}: {list(analysis_data.keys())}")
+                if analysis_data.get("should_store"):
+                    counts = {
+                        "moments": 1,  # Always create one moment
+                        "reflections": len(analysis_data.get("reflections", [])),
+                        "emotions": len(analysis_data.get("emotions", [])),
+                        "values": len(analysis_data.get("values", [])),
+                        "patterns": len(analysis_data.get("patterns", [])),
+                        "contradictions": len(analysis_data.get("contradictions", []))
+                    }
+                    logger.debug(f"Claude proposed memory counts for user {user_id}: {counts}")
+                    
             except json.JSONDecodeError as e:
                 logger.warning(f"Failed to parse analysis JSON: {e}. Raw response: {analysis_response[:200]}...")
                 return {"should_store": False, "reasoning": "Failed to parse analysis"}
@@ -356,12 +345,17 @@ Respond in this exact JSON format:
         
         # Create reflection proposals with new schema
         for reflection in analysis.get("reflections", []):
+            # Skip if missing essential content
+            if not reflection.get("content"):
+                logger.warning(f"Skipping reflection proposal with missing content for user {user_id}")
+                continue
+                
             reflection_id = str(uuid.uuid4())
             proposals.append({
                 "update_type": "reflection",
                 "data": {
                     "id": reflection_id,
-                    "content": reflection["content"],
+                    "content": reflection.get("content", ""),
                     "insight_type": "realization",
                     "depth_level": 2,  # Therapist-validated insights are deeper
                     "confidence": 0.8,  # High confidence from Claude analysis
@@ -387,11 +381,16 @@ Respond in this exact JSON format:
         
         # Create emotion proposals with new schema
         for emotion in analysis.get("emotions", []):
+            # Skip if missing essential label
+            if not emotion.get("label"):
+                logger.warning(f"Skipping emotion proposal with missing label for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "emotion",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "label": emotion["label"],
+                    "label": emotion.get("label", "unknown"),
                     "intensity": emotion.get("intensity", 0.5),
                     "nuance": emotion.get("evidence", "Detected in therapeutic conversation"),
                     "bodily_sensation": "unspecified",
@@ -402,11 +401,16 @@ Respond in this exact JSON format:
         
         # Create contradiction proposals with new schema
         for contradiction in analysis.get("contradictions", []):
+            # Skip if missing essential summary
+            if not contradiction.get("summary"):
+                logger.warning(f"Skipping contradiction proposal with missing summary for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "contradiction",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "summary": contradiction["summary"],
+                    "summary": contradiction.get("summary", ""),
                     "tension_type": "values",  # Default to values tension
                     "intensity": 0.6,  # Medium intensity by default
                     "user_id": user_id,
@@ -417,11 +421,16 @@ Respond in this exact JSON format:
         
         # Create value proposals with new schema
         for value in analysis.get("values", []):
+            # Skip if missing essential name
+            if not value.get("name"):
+                logger.warning(f"Skipping value proposal with missing name for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "value",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "name": value["name"],
+                    "name": value.get("name", ""),
                     "description": value.get("description", ""),
                     "importance": value.get("importance", 0.7),
                     "strength": 0.8,  # New values are typically strongly held
@@ -433,11 +442,16 @@ Respond in this exact JSON format:
         
         # Create pattern proposals with new schema
         for pattern in analysis.get("patterns", []):
+            # Skip if missing essential description
+            if not pattern.get("description"):
+                logger.warning(f"Skipping pattern proposal with missing description for user {user_id}")
+                continue
+                
             proposals.append({
                 "update_type": "pattern",
                 "data": {
                     "id": str(uuid.uuid4()),
-                    "description": pattern["description"],
+                    "description": pattern.get("description", ""),
                     "pattern_type": pattern.get("pattern_type", "behavioral"),
                     "frequency": pattern.get("frequency", "occasional"),
                     "user_id": user_id,

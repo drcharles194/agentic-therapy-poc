@@ -56,13 +56,6 @@ class Emotion(BaseModel):
     user_id: str = Field(..., description="User this emotion belongs to")
 
 
-class SelfKindnessEvent(BaseModel):
-    """Model for self-kindness events tracked in memory."""
-    description: str = Field(..., description="Description of the self-kindness event")
-    timestamp: datetime = Field(default_factory=datetime.utcnow, description="When the event occurred")
-    user_id: str = Field(..., description="User this event belongs to")
-
-
 class Contradiction(BaseModel):
     """Model for contradictions or tensions identified in user's values/behavior."""
     summary: str = Field(..., description="Summary of the contradiction")
