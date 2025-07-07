@@ -21,58 +21,8 @@ class MemoryAnalyzer:
     """Analyzes conversations to propose intelligent memory updates."""
     
     def __init__(self):
-        self.analysis_prompt_template = """
-You are a memory analyst for the Sage therapeutic AI system. Your job is to analyze conversations and identify what's worth storing in the user's memory graph.
-
-Review this conversation and identify:
-
-1. **REFLECTIONS**: Deep insights, realizations, or meaningful thoughts from the user that reveal something important about their inner world
-2. **EMOTIONS**: Clear emotional states expressed by the user (not assumptions)  
-3. **SELF-KINDNESS**: Moments where the user was compassionate to themselves
-4. **CONTRADICTIONS**: Value tensions or conflicting desires/beliefs the user expressed
-
-Only propose storing content that is:
-- Explicitly expressed by the user (not inferred)
-- Meaningful enough to inform future therapeutic conversations
-- Respectful of the user's privacy and autonomy
-
-User Message: "{user_message}"
-Sage Response: "{sage_response}"
-
-IMPORTANT: Be selective. Not every conversation needs memory storage. Only store content that would genuinely help Sage provide better therapeutic support in future conversations.
-
-Respond in this exact JSON format:
-{{
-  "should_store": true/false,
-  "reflections": [
-    {{
-      "content": "user's exact words or paraphrased insight",
-      "significance": "why this reflection is therapeutically valuable",
-      "source": "user"
-    }}
-  ],
-  "emotions": [
-    {{
-      "label": "anxiety/sadness/joy/etc",
-      "intensity": 0.1-1.0,
-      "evidence": "what in their words suggests this emotion"
-    }}
-  ],
-  "self_kindness_events": [
-    {{
-      "description": "specific self-compassionate action or thought",
-      "evidence": "user's words that show this"
-    }}
-  ],
-  "contradictions": [
-    {{
-      "summary": "brief description of the value tension",
-      "details": "the conflicting desires/beliefs expressed"
-    }}
-  ],
-  "reasoning": "brief explanation of storage decisions"
-}}
-"""
+        """Initialize the MemoryAnalyzer."""
+        pass
 
     def _extract_moment_context(self, user_message: str) -> str:
         """Extract meaningful context from user message for moment description."""
