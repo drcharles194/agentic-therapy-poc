@@ -1,8 +1,12 @@
 """
-User management API endpoints.
+User management endpoints for the Collaborative PoC.
+
+Provides RESTful endpoints for user creation, retrieval, and therapy data analysis.
 """
 import logging
 import uuid
+import time
+import asyncio
 from typing import List
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -11,9 +15,16 @@ from backend.models.schema import (
     CreateUserRequest, 
     UpdateUserRequest, 
     UserListResponse,
+    TherapistQueryRequest,
+    TherapistQueryResponse,
+    GraphRAGComparisonResponse,
+    GraphRAGComparisonResult,
     ErrorResponse
 )
 from backend.services.neo4j import Neo4jService, get_neo4j_service
+from backend.services.anthropic_service import anthropic_service
+from backend.services.graphrag import Neo4jGraphRAGService
+from backend.services.official_graphrag import OfficialGraphRAGService
 from backend.utils.name_generator import generate_unique_name
 
 # Configure logging
@@ -21,6 +32,20 @@ logger = logging.getLogger(__name__)
 
 # Create router
 router = APIRouter(prefix="/users", tags=["users"])
+
+
+def get_graphrag_service(
+    neo4j_service: Neo4jService = Depends(get_neo4j_service)
+) -> Neo4jGraphRAGService:
+    """Dependency to get GraphRAG service instance."""
+    return Neo4jGraphRAGService(neo4j_service)
+
+
+def get_official_graphrag_service(
+    neo4j_service: Neo4jService = Depends(get_neo4j_service)
+) -> OfficialGraphRAGService:
+    """Dependency to get Official GraphRAG service instance."""
+    return OfficialGraphRAGService(neo4j_service)
 
 
 @router.post("/", response_model=User)
@@ -230,4 +255,192 @@ async def update_user(
         raise HTTPException(
             status_code=500,
             detail="Internal server error while updating user"
+        )
+
+
+@router.post("/{user_id}/query", response_model=TherapistQueryResponse)
+async def query_user_data(
+    user_id: str,
+    request: TherapistQueryRequest,
+    graphrag_service: Neo4jGraphRAGService = Depends(get_graphrag_service)
+) -> TherapistQueryResponse:
+    """
+    Execute a GraphRAG query to analyze user data for therapists.
+    
+    This endpoint allows therapists to ask natural language questions about a user's
+    therapy data and receive intelligent insights based on the user's conversation history,
+    emotions, reflections, patterns, and other stored information.
+    
+    Args:
+        user_id: The user's UUID to query data for
+        request: TherapistQueryRequest with the natural language query
+        graphrag_service: GraphRAG service dependency
+        
+    Returns:
+        TherapistQueryResponse: Natural language analysis with insights and data sources
+    """
+    logger.info(f"Therapist query for user {user_id}: {request.query[:100]}...")
+    
+    try:
+        # Execute GraphRAG query
+        result = await graphrag_service.query_user_data(
+            user_id=user_id,
+            query=request.query,
+            context=request.context
+        )
+        
+        # Convert GraphRAG result to API response
+        response = TherapistQueryResponse(
+            query=result.query,
+            user_id=result.user_id,
+            user_name=result.user_name,
+            response=result.natural_response,
+            confidence=result.confidence,
+            data_sources=result.data_sources
+        )
+        
+        logger.info(f"Completed GraphRAG query for user {user_id} with confidence {result.confidence:.2f}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing GraphRAG query for user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error while processing query"
+        )
+
+
+@router.post("/{user_id}/query/compare", response_model=GraphRAGComparisonResponse)
+async def compare_graphrag_implementations(
+    user_id: str,
+    request: TherapistQueryRequest,
+    custom_graphrag: Neo4jGraphRAGService = Depends(get_graphrag_service),
+    official_graphrag: OfficialGraphRAGService = Depends(get_official_graphrag_service)
+) -> GraphRAGComparisonResponse:
+    """
+    Execute concurrent GraphRAG queries to compare custom vs official implementations.
+    
+    This endpoint runs both the custom optimized GraphRAG and the official Neo4j GraphRAG
+    implementations simultaneously to provide a side-by-side comparison of approaches,
+    performance, and results.
+    
+    Args:
+        user_id: The user's UUID to query data for
+        request: TherapistQueryRequest with the natural language query
+        custom_graphrag: Custom GraphRAG service dependency
+        official_graphrag: Official Neo4j GraphRAG service dependency
+        
+    Returns:
+        GraphRAGComparisonResponse: Comparison results from both implementations
+    """
+    logger.info(f"GraphRAG comparison query for user {user_id}: {request.query[:100]}...")
+    
+    try:
+        start_time = time.time()
+        
+        # Run both GraphRAG implementations concurrently
+        custom_start = time.time()
+        official_start = time.time()
+        
+        # Execute both queries in parallel using asyncio.gather
+        custom_task = custom_graphrag.query_user_data(
+            user_id=user_id,
+            query=request.query,
+            context=request.context
+        )
+        
+        official_task = official_graphrag.query_user_data(
+            user_id=user_id,
+            query=request.query,
+            context=request.context
+        )
+        
+        # Wait for both to complete
+        custom_result, official_result = await asyncio.gather(
+            custom_task, official_task, return_exceptions=True
+        )
+        
+        custom_end = time.time()
+        official_end = time.time()
+        
+        # Handle any exceptions from the tasks
+        if isinstance(custom_result, Exception):
+            logger.error(f"Custom GraphRAG failed: {custom_result}")
+            custom_comparison_result = GraphRAGComparisonResult(
+                implementation="Custom (Multi-Index)",
+                response=f"Error: {str(custom_result)}",
+                confidence=0.0,
+                data_sources=[],
+                processing_time_ms=(custom_end - custom_start) * 1000,
+                indexes_used=[],
+                retrieval_method="direct_vector_search",
+                error=str(custom_result)
+            )
+        else:
+            # Extract information from custom result
+            custom_comparison_result = GraphRAGComparisonResult(
+                implementation="Custom (Multi-Index)",
+                response=custom_result.natural_response,
+                confidence=custom_result.confidence,
+                data_sources=custom_result.data_sources,
+                processing_time_ms=(custom_end - custom_start) * 1000,
+                indexes_used=custom_result.data_sources,  # Custom uses data_sources as index info
+                retrieval_method="direct_vector_search"
+            )
+        
+        if isinstance(official_result, Exception):
+            logger.error(f"Official GraphRAG failed: {official_result}")
+            official_comparison_result = GraphRAGComparisonResult(
+                implementation="Official Neo4j GraphRAG",
+                response=f"Error: {str(official_result)}",
+                confidence=0.0,
+                data_sources=[],
+                processing_time_ms=(official_end - official_start) * 1000,
+                indexes_used=[],
+                retrieval_method="official_multi_index_retrieval",
+                error=str(official_result)
+            )
+        else:
+            # Extract information from official result
+            official_comparison_result = GraphRAGComparisonResult(
+                implementation="Official Neo4j GraphRAG",
+                response=official_result.natural_response,
+                confidence=official_result.confidence,
+                data_sources=official_result.data_sources,
+                processing_time_ms=(official_end - official_start) * 1000,
+                indexes_used=official_result.data_sources,  # Official uses data_sources as retriever info
+                retrieval_method=official_result.retrieval_method
+            )
+        
+        total_time = (time.time() - start_time) * 1000
+        
+        # Get user name for response
+        user_name = "Unknown"
+        if not isinstance(custom_result, Exception):
+            user_name = custom_result.user_name
+        elif not isinstance(official_result, Exception):
+            user_name = official_result.user_name
+        
+        # Create comparison response
+        comparison_response = GraphRAGComparisonResponse(
+            query=request.query,
+            user_id=user_id,
+            user_name=user_name,
+            custom_result=custom_comparison_result,
+            official_result=official_comparison_result,
+            total_processing_time_ms=total_time
+        )
+        
+        logger.info(f"Completed GraphRAG comparison for user {user_id} in {total_time:.2f}ms")
+        return comparison_response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing GraphRAG comparison for user {user_id}: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Internal server error while processing comparison query"
         ) 

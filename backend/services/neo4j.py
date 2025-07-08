@@ -9,6 +9,7 @@ from neo4j import GraphDatabase, AsyncGraphDatabase
 from neo4j.exceptions import ServiceUnavailable, AuthError
 
 from backend.config import settings
+from backend.services.embedding import embedding_service
 
 logger = logging.getLogger(__name__)
 
@@ -36,6 +37,9 @@ class Neo4jService:
             # Test connection
             await self.driver.verify_connectivity()
             logger.info(f"Connected to Neo4j at {settings.neo4j_uri}")
+            
+            # Initialize embedding service
+            await embedding_service.initialize()
             
             # Initialize schema
             await self._initialize_schema()
@@ -501,6 +505,9 @@ class Neo4jService:
     # New complex schema methods
     async def add_moment(self, user_id: str, moment_data: Dict[str, Any]) -> bool:
         """Add a moment to user's memory using the new complex schema."""
+        context = moment_data.get("context", "")
+        
+        # Create moment immediately without embedding (don't block user conversation)
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -523,19 +530,31 @@ class Neo4jService:
                 "user_id": user_id,
                 "id": moment_data["id"],
                 "timestamp": moment_data["timestamp"],
-                "context": moment_data["context"],
+                "context": context,
                 "session_id": moment_data["session_id"]
             },
             "moment addition"
         )
         
         if result:
-            logger.info(f"Added moment for user {user_id}: {moment_data['id']}")
+            # Generate embedding in background (non-blocking)
+            if context:
+                self._generate_embedding_async(
+                    moment_data["id"], 
+                    context, 
+                    "context_embedding", 
+                    "moment context"
+                )
+            
+            logger.info(f"Added moment for user {user_id}: {moment_data['id']} (embedding generating in background)")
             return True
         return False
 
     async def add_complex_reflection(self, user_id: str, reflection_data: Dict[str, Any]) -> bool:
         """Add a reflection using the new complex schema."""
+        content = reflection_data.get("content", "")
+        
+        # Create reflection immediately without embedding (don't block user conversation)
         query = """
         MATCH (u:User {user_id: $user_id})
         MATCH (m:Moment {id: $moment_id, user_id: $user_id})
@@ -560,7 +579,7 @@ class Neo4jService:
                 "user_id": user_id,
                 "moment_id": reflection_data["moment_id"],
                 "id": reflection_data["id"],
-                "content": reflection_data.get("content", ""),
+                "content": content,
                 "insight_type": reflection_data.get("insight_type", "realization"),
                 "depth_level": reflection_data.get("depth_level", 1),
                 "confidence": reflection_data.get("confidence", 0.5),
@@ -570,7 +589,16 @@ class Neo4jService:
         )
         
         if result:
-            logger.info(f"Added complex reflection for user {user_id}: {reflection_data['id']}")
+            # Generate embedding in background (non-blocking)
+            if content:
+                self._generate_embedding_async(
+                    reflection_data["id"], 
+                    content, 
+                    "content_embedding", 
+                    "reflection content"
+                )
+            
+            logger.info(f"Added complex reflection for user {user_id}: {reflection_data['id']} (embedding generating in background)")
             return True
         return False
 
@@ -672,6 +700,9 @@ class Neo4jService:
             logger.warning(f"Refusing to add value with invalid name for user {user_id}: '{name}'")
             return False
             
+        description = value_data.get("description", "")
+        
+        # Create value immediately without embedding (don't block user conversation)
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -694,7 +725,7 @@ class Neo4jService:
                 "user_id": user_id,
                 "id": value_data["id"],
                 "name": value_data.get("name", ""),
-                "description": value_data.get("description", ""),
+                "description": description,
                 "importance": value_data.get("importance", 0.5),
                 "strength": value_data.get("strength", 0.5),
                 "awareness_level": value_data.get("awareness_level", 0.5)
@@ -703,7 +734,16 @@ class Neo4jService:
         )
         
         if result:
-            logger.info(f"Added complex value for user {user_id}: {value_data['name']}")
+            # Generate embedding in background (non-blocking)
+            if description:
+                self._generate_embedding_async(
+                    value_data["id"], 
+                    description, 
+                    "description_embedding", 
+                    "value description"
+                )
+            
+            logger.info(f"Added complex value for user {user_id}: {value_data['name']} (embedding generating in background)")
             return True
         return False
 
@@ -715,6 +755,7 @@ class Neo4jService:
             logger.warning(f"Refusing to add pattern with insufficient description for user {user_id}: '{description}'")
             return False
             
+        # Create pattern immediately without embedding (don't block user conversation)
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -736,7 +777,7 @@ class Neo4jService:
             {
                 "user_id": user_id,
                 "id": pattern_data["id"],
-                "description": pattern_data.get("description", ""),
+                "description": description,
                 "pattern_type": pattern_data.get("pattern_type", "behavioral"),
                 "frequency": pattern_data.get("frequency", "occasional")
             },
@@ -744,7 +785,16 @@ class Neo4jService:
         )
         
         if result:
-            logger.info(f"Added complex pattern for user {user_id}: {pattern_data['description'][:50]}...")
+            # Generate embedding in background (non-blocking)
+            if description:
+                self._generate_embedding_async(
+                    pattern_data["id"], 
+                    description, 
+                    "description_embedding", 
+                    "pattern description"
+                )
+            
+            logger.info(f"Added complex pattern for user {user_id}: {pattern_data['description'][:50]}... (embedding generating in background)")
             return True
         return False
 
@@ -756,6 +806,7 @@ class Neo4jService:
             logger.warning(f"Refusing to add persona note with insufficient content for user {user_id}: '{content}'")
             return False
             
+        # Create persona note immediately without embedding (don't block user conversation)
         query = """
         MATCH (u:User {user_id: $user_id})
         
@@ -787,7 +838,7 @@ class Neo4jService:
                 "id": note_data["id"],
                 "persona": note_data.get("persona", "Sage"),
                 "note_type": note_data.get("note_type", "observation"),
-                "content": note_data.get("content", ""),
+                "content": content,
                 "emotion_id": note_data.get("emotion_id"),
                 "reflection_id": note_data.get("reflection_id")
             },
@@ -795,7 +846,16 @@ class Neo4jService:
         )
         
         if result:
-            logger.info(f"Added complex persona note for user {user_id}: {note_data['id']}")
+            # Generate embedding in background (non-blocking)
+            if content:
+                self._generate_embedding_async(
+                    note_data["id"], 
+                    content, 
+                    "content_embedding", 
+                    "persona note content"
+                )
+            
+            logger.info(f"Added complex persona note for user {user_id}: {note_data['id']} (embedding generating in background)")
             return True
         return False
 
@@ -864,6 +924,34 @@ class Neo4jService:
             logger.error(f"Error retrieving all users: {e}")
             return []
 
+    async def get_user(self, user_id: str) -> Optional[Dict[str, Any]]:
+        """Get a single user's basic information."""
+        query = """
+        MATCH (u:User {user_id: $user_id})
+        WHERE u.user_id <> '__SCHEMA_DUMMY__'
+        RETURN u.user_id as user_id,
+               u.name as name,
+               u.created_at as created_at,
+               u.last_active as last_active
+        """
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.run(query, {"user_id": user_id})
+                record = await result.single()
+                if record:
+                    return {
+                        "user_id": record["user_id"],
+                        "name": record["name"] or record["user_id"][-8:],  # Fallback to last 8 chars if name is null
+                        "id": record["user_id"],  # For compatibility
+                        "created_at": record["created_at"].to_native() if record["created_at"] else None,
+                        "last_active": record["last_active"].to_native() if record["last_active"] else None
+                    }
+                return None
+        except Exception as e:
+            logger.error(f"Error retrieving user {user_id}: {e}")
+            return None
+
     async def update_user_name(self, user_id: str, new_name: str) -> bool:
         """Update a user's display name."""
         query = """
@@ -883,6 +971,75 @@ class Neo4jService:
             logger.info(f"Updated name for user {user_id} to: {new_name}")
             return True
         return False
+
+    async def _generate_embedding_if_available(self, text: str, field_description: str = "content") -> Optional[List[float]]:
+        """
+        Generate embedding for text if embedding service is available.
+        
+        Args:
+            text: The text to generate embedding for
+            field_description: Description of the field for logging (e.g., "moment context", "reflection content")
+            
+        Returns:
+            List of embedding floats or None if unavailable/failed
+        """
+        if not text or not text.strip():
+            return None
+            
+        if not embedding_service.is_available():
+            return None
+            
+        try:
+            embedding = await embedding_service.generate_embedding(text.strip())
+            if embedding:
+                logger.debug(f"Generated embedding for {field_description}: {text[:50]}...")
+                return embedding
+        except Exception as e:
+            logger.warning(f"Failed to generate embedding for {field_description}: {e}")
+            
+        return None
+
+    def _generate_embedding_async(self, node_id: str, text: str, embedding_property: str, field_description: str):
+        """
+        Generate embedding asynchronously in the background without blocking user conversations.
+        
+        Args:
+            node_id: ID of the node to update
+            text: Text to generate embedding for
+            embedding_property: Property name to store embedding (e.g., "context_embedding")
+            field_description: Description for logging
+        """
+        async def background_embedding():
+            try:
+                if not text or not text.strip() or not embedding_service.is_available():
+                    return
+                    
+                embedding = await embedding_service.generate_embedding(text.strip())
+                if embedding:
+                    # Update the node with the generated embedding
+                    query = f"""
+                    MATCH (n {{id: $node_id}})
+                    SET n.{embedding_property} = $embedding
+                    RETURN n.id as updated_id
+                    """
+                    
+                    async with self.get_session() as session:
+                        result = await session.run(query, {
+                            "node_id": node_id,
+                            "embedding": embedding
+                        })
+                        record = await result.single()
+                        if record:
+                            logger.debug(f"✅ Background embedding generated for {field_description}: {text[:50]}...")
+                        else:
+                            logger.warning(f"Failed to update {field_description} embedding for node {node_id}")
+                            
+            except Exception as e:
+                logger.error(f"Background embedding generation failed for {field_description}: {e}")
+        
+        # Fire and forget - don't block the user conversation
+        import asyncio
+        asyncio.create_task(background_embedding())
 
 
 # Global service instance

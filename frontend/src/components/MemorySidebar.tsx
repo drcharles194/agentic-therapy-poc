@@ -131,19 +131,19 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ memoryData, isOpen, onClo
   const renderValues = () => (
     <div className="space-y-4">
       {!memoryData?.sage?.values || memoryData.sage.values.length === 0 ? (
-        <p className="text-gray-500 text-sm">No values identified yet</p>
+        <p className="text-collaborative-text-light text-sm">No values identified yet</p>
       ) : (
         memoryData.sage.values.map((value) => (
-          <div key={value.id} className="border rounded-lg p-3 bg-gray-50">
+          <div key={value.id} className="card-pastel p-3">
             <div className="flex justify-between items-start mb-2">
-              <h5 className="font-medium text-gray-800">{value.name}</h5>
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+              <h5 className="heading-xs text-collaborative-text">{value.name}</h5>
+              <span className="px-2 py-1 bg-pastel-mint-100 text-collaborative-success rounded text-xs border border-pastel-mint-200">
                 {Math.round(value.importance * 100)}% important
               </span>
             </div>
             
             {value.description && (
-              <p className="text-sm text-gray-700 mb-2">{value.description}</p>
+              <p className="text-sm text-collaborative-text-light mb-2">{value.description}</p>
             )}
           </div>
         ))
@@ -154,18 +154,18 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ memoryData, isOpen, onClo
   const renderPatterns = () => (
     <div className="space-y-4">
       {!memoryData?.sage?.patterns || memoryData.sage.patterns.length === 0 ? (
-        <p className="text-gray-500 text-sm">No patterns identified yet</p>
+        <p className="text-collaborative-text-light text-sm">No patterns identified yet</p>
       ) : (
         memoryData.sage.patterns.map((pattern) => (
-          <div key={pattern.id} className="border rounded-lg p-3 bg-gray-50">
+          <div key={pattern.id} className="card-pastel p-3">
             <div className="flex justify-between items-start mb-2">
-              <h5 className="font-medium text-gray-800">{pattern.pattern_type}</h5>
-              <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+              <h5 className="heading-xs text-collaborative-text">{pattern.pattern_type}</h5>
+              <span className="px-2 py-1 bg-pastel-lavender-100 text-collaborative-text rounded text-xs border border-pastel-lavender-200">
                 {pattern.frequency}
               </span>
             </div>
             
-            <p className="text-sm text-gray-700 mb-2">{pattern.description}</p>
+            <p className="text-sm text-collaborative-text-light mb-2">{pattern.description}</p>
           </div>
         ))
       )}
@@ -175,25 +175,25 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ memoryData, isOpen, onClo
   const renderNotes = () => (
     <div className="space-y-4">
       {!memoryData?.sage?.notes || memoryData.sage.notes.length === 0 ? (
-        <p className="text-gray-500 text-sm">No therapeutic notes yet</p>
+        <p className="text-collaborative-text-light text-sm">No therapeutic notes yet</p>
       ) : (
         memoryData.sage.notes.map((note) => (
-          <div key={note.id} className="border rounded-lg p-3 bg-gray-50">
+          <div key={note.id} className="card-pastel p-3">
             <div className="flex justify-between items-start mb-2">
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-1 bg-indigo-100 text-indigo-800 rounded text-xs">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="px-2 py-1 bg-collaborative-primary text-white rounded text-xs">
                   {note.persona}
                 </span>
-                <span className="px-2 py-1 bg-gray-100 text-gray-700 rounded text-xs">
+                <span className="px-2 py-1 bg-pastel-purple-100 text-collaborative-text rounded text-xs border border-pastel-purple-200">
                   {note.note_type}
                 </span>
               </div>
-              <span className="text-xs text-gray-500">
+              <span className="text-xs text-collaborative-text-light whitespace-nowrap">
                 {formatDate(note.created_at)}
               </span>
             </div>
             
-            <p className="text-sm text-gray-700">{note.content}</p>
+            <p className="text-sm text-collaborative-text">{note.content}</p>
           </div>
         ))
       )}
@@ -213,51 +213,72 @@ const MemorySidebar: React.FC<MemorySidebarProps> = ({ memoryData, isOpen, onClo
   }
 
   return (
-    <div className="fixed inset-y-0 right-0 w-96 bg-collaborative-surface shadow-xl z-50 flex flex-col border-l border-pastel-purple-200">
-      <div className="p-4 border-b border-pastel-purple-100 sidebar-gradient">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="heading-md text-collaborative-text">Memory</h2>
-          <button
-            onClick={onClose}
-            className="text-collaborative-text-light hover:text-collaborative-text text-xl transition-colors"
-          >
-            ×
-          </button>
-        </div>
-        
-        {memoryData && (
-          <div className="mb-4">
-            <h3 className="heading-sm text-brand">
-              {memoryData.user_name || 'Anonymous'}
-            </h3>
-          </div>
-        )}
-        
-        <div className="flex flex-wrap gap-1">
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`px-3 py-1 rounded text-sm transition-colors ${
-                activeTab === tab.id
-                  ? 'bg-collaborative-primary text-white shadow-sm'
-                  : 'bg-pastel-purple-100 text-collaborative-text hover:bg-pastel-purple-200 border border-pastel-purple-200'
-              }`}
-            >
-              {tab.icon} {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+    <>
+      {/* Mobile/Tablet Overlay */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 z-40 xl:hidden"
+          onClick={onClose}
+        />
+      )}
       
-      <div className="flex-1 p-4 overflow-y-auto bg-collaborative-background">
-        {memoryData ? renderTabContent() : (
-          <div className="text-center text-collaborative-text-light">
-            <p>No memory data available</p>
+      {/* Sidebar */}
+      <div className={`
+        fixed inset-y-0 right-0 
+        w-full sm:w-80 xl:w-96 
+        bg-collaborative-surface shadow-xl z-50 
+        flex flex-col border-l border-pastel-purple-200
+        transform transition-transform duration-300 ease-in-out
+        ${isOpen ? 'translate-x-0' : 'translate-x-full'}
+      `}>
+        <div className="p-3 md:p-4 border-b border-pastel-purple-100 sidebar-gradient">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="heading-md text-collaborative-text">Memory</h2>
+            <button
+              onClick={onClose}
+              className="text-collaborative-text-light hover:text-collaborative-text text-xl transition-colors p-1 hover:bg-pastel-purple-100 rounded-full"
+            >
+              ×
+            </button>
           </div>
-        )}
+          
+          {memoryData && (
+            <div className="mb-4">
+              <h3 className="heading-sm text-brand truncate">
+                {memoryData.user_name || 'Anonymous'}
+              </h3>
+            </div>
+          )}
+          
+          <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-2 gap-1">
+            {tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`px-2 py-2 rounded text-xs transition-colors text-center ${
+                  activeTab === tab.id
+                    ? 'bg-collaborative-primary text-white shadow-sm'
+                    : 'bg-pastel-purple-100 text-collaborative-text hover:bg-pastel-purple-200 border border-pastel-purple-200'
+                }`}
+              >
+                <div className="flex flex-col items-center space-y-1">
+                  <span>{tab.icon}</span>
+                  <span className="truncate">{tab.label}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        <div className="flex-1 p-3 md:p-4 overflow-y-auto bg-collaborative-background">
+          {memoryData ? renderTabContent() : (
+            <div className="text-center text-collaborative-text-light">
+              <p>No memory data available</p>
+            </div>
+          )}
+        </div>
       </div>
-    </div>
+    </>
   )
 }
 

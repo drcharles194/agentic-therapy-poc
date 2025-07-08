@@ -202,177 +202,184 @@ const ChatPage: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-collaborative-background flex">
-      <div className="flex-1 flex flex-col max-w-5xl mx-auto">
-        {/* Header */}
-        <header className="bg-collaborative-surface shadow-sm border-b border-pastel-purple-100 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-6">
-              {/* Logo */}
-              <div className="flex items-center">
-                <img 
-                  src="/assets/collaborative-logo.png" 
-                  alt="Collaborative Solutions" 
-                  className="h-12 w-auto"
-                />
-              </div>
-              
-              {/* User Info & Controls */}
-              {currentUser && (
-                <div className="flex items-center space-x-2 ml-4">
-                  <span className="text-collaborative-text-light">Hello,</span>
-                  {editingName ? (
-                    <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
-                        value={editNameValue}
-                        onChange={(e) => setEditNameValue(e.target.value)}
-                        className="px-2 py-1 input-pastel text-sm"
-                        onKeyDown={(e) => e.key === 'Enter' && handleUpdateUserName()}
-                        autoFocus
-                      />
-                      <button
-                        onClick={handleUpdateUserName}
-                        className="text-collaborative-success hover:text-pastel-mint-400 text-sm transition-colors"
-                      >
-                        ✓
-                      </button>
-                      <button
-                        onClick={cancelEditingName}
-                        className="text-collaborative-error hover:opacity-80 text-sm transition-colors"
-                      >
-                        ✗
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={startEditingName}
-                      className="text-brand font-medium hover:text-brand-dark transition-colors"
-                    >
-                      {currentUser.name}
-                    </button>
-                  )}
+    <div className="min-h-screen bg-collaborative-background">
+      {/* Main Content */}
+      <div className="w-full max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="bg-collaborative-surface shadow-sm border-b border-pastel-purple-100 p-3 md:p-4 rounded-t-lg">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 min-w-0 flex-1">
+                {/* Logo */}
+                <div className="flex items-center flex-shrink-0">
+                  <img 
+                    src="/assets/collaborative-logo.png" 
+                    alt="Collaborative Solutions" 
+                    className="h-8 md:h-10 w-auto"
+                  />
                 </div>
-              )}
-            </div>
-
-            <div className="flex items-center space-x-3">
-              {/* User Dropdown */}
-              <div className="relative">
-                <button
-                  onClick={() => setShowUserDropdown(!showUserDropdown)}
-                  className="button-secondary text-sm font-medium"
-                >
-                  Switch User ({allUsers.length})
-                </button>
                 
-                {showUserDropdown && (
-                  <div className="absolute right-0 mt-2 w-64 card-pastel shadow-lg z-10">
-                    <div className="p-2">
+                {/* User Info & Controls */}
+                {currentUser && (
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <span className="text-collaborative-text-light flex-shrink-0 text-sm">Hello,</span>
+                    {editingName ? (
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <input
+                          type="text"
+                          value={editNameValue}
+                          onChange={(e) => setEditNameValue(e.target.value)}
+                          className="px-2 py-1 input-pastel text-sm min-w-0 w-20 sm:w-28"
+                          onKeyDown={(e) => e.key === 'Enter' && handleUpdateUserName()}
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleUpdateUserName}
+                          className="text-collaborative-success hover:text-pastel-mint-400 text-sm transition-colors flex-shrink-0"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={cancelEditingName}
+                          className="text-collaborative-error hover:opacity-80 text-sm transition-colors flex-shrink-0"
+                        >
+                          ✗
+                        </button>
+                      </div>
+                    ) : (
                       <button
-                        onClick={() => { createNewUser(); setShowUserDropdown(false); }}
-                        className="w-full text-left px-3 py-2 text-sm text-brand hover:bg-pastel-purple-50 rounded transition-colors"
-                        disabled={isCreatingUser}
+                        onClick={startEditingName}
+                        className="text-brand font-medium hover:text-brand-dark transition-colors truncate max-w-28 sm:max-w-40 text-sm"
                       >
-                        + Create New User
+                        {currentUser.name}
                       </button>
-                      
-                      {allUsers.length > 0 && (
-                        <div className="border-t border-pastel-purple-100 mt-2 pt-2">
-                          {allUsers.map(user => (
-                            <button
-                              key={user.user_id}
-                              onClick={() => switchToUser(user.user_id)}
-                              className={`w-full text-left px-3 py-2 text-sm rounded transition-colors hover:bg-pastel-purple-50 ${
-                                currentUser?.user_id === user.user_id 
-                                  ? 'bg-pastel-purple-100 text-brand border border-pastel-purple-200' 
-                                  : 'text-collaborative-text'
-                              }`}
-                            >
-                              <div className="font-medium">{user.name}</div>
-                              <div className="text-xs text-collaborative-text-light">
-                                {user.moment_count} conversations
-                              </div>
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
+                    )}
                   </div>
                 )}
               </div>
 
-              <button
-                onClick={handleViewMemory}
-                className="button-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={isLoading || !currentUser}
-              >
-                View Memory
-              </button>
-            </div>
-          </div>
-        </header>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mx-4 mt-4 p-3 bg-pastel-peach-50 border border-pastel-peach-200 text-collaborative-error rounded-lg">
-            {error}
-            <button
-              onClick={() => setError(null)}
-              className="ml-2 text-collaborative-error hover:opacity-80 transition-opacity"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {/* Persona Panel */}
-        <div className="p-4">
-          <PersonaPanel persona={sagePersona} />
-        </div>
-
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center text-collaborative-text-light mt-8">
-                <p className="heading-sm text-collaborative-text">Start a conversation with Sage</p>
-                <p className="text-sm mt-2">Welcome to your therapeutic journey</p>
-                <div className="mt-4 inline-block px-4 py-2 bg-pastel-purple-50 rounded-full text-xs text-brand">
-                  ✨ Powered by Collaborative Solutions
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                {/* User Dropdown */}
+                <div className="relative flex-1 sm:flex-initial">
+                  <button
+                    onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    className="button-secondary text-xs font-medium w-full sm:w-auto whitespace-nowrap px-2 sm:px-3 py-2"
+                  >
+                    <span className="hidden sm:inline">Switch User ({allUsers.length})</span>
+                    <span className="sm:hidden">Users ({allUsers.length})</span>
+                  </button>
+                  
+                  {showUserDropdown && (
+                    <div className="absolute right-0 mt-2 w-full sm:w-60 card-pastel shadow-lg z-10">
+                      <div className="p-2">
+                        <button
+                          onClick={() => { createNewUser(); setShowUserDropdown(false); }}
+                          className="w-full text-left px-3 py-2 text-sm text-brand hover:bg-pastel-purple-50 rounded transition-colors"
+                          disabled={isCreatingUser}
+                        >
+                          + Create New User
+                        </button>
+                        
+                        {allUsers.length > 0 && (
+                          <div className="border-t border-pastel-purple-100 mt-2 pt-2">
+                            {allUsers.map(user => (
+                              <button
+                                key={user.user_id}
+                                onClick={() => switchToUser(user.user_id)}
+                                className={`w-full text-left px-3 py-2 text-sm rounded transition-colors hover:bg-pastel-purple-50 ${
+                                  currentUser?.user_id === user.user_id 
+                                    ? 'bg-pastel-purple-100 text-brand border border-pastel-purple-200' 
+                                    : 'text-collaborative-text'
+                                }`}
+                              >
+                                <div className="font-medium truncate">{user.name}</div>
+                                <div className="text-xs text-collaborative-text-light truncate">
+                                  {user.moment_count} conversations
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
+
+                <button
+                  onClick={handleViewMemory}
+                  className="button-primary disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 px-2 sm:px-4 py-2 text-xs"
+                  disabled={isLoading || !currentUser}
+                >
+                  <span className="hidden sm:inline">View Memory</span>
+                  <span className="sm:hidden">Memory</span>
+                </button>
               </div>
-            ) : (
-              messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))
-            )}
-            
-            {/* Loading indicator */}
-            {isLoading && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-pastel-purple-100 text-collaborative-text px-4 py-3 rounded-lg border border-pastel-purple-200">
-                  <div className="flex items-center space-x-3">
-                    <div className="animate-pulse-soft rounded-full h-4 w-4 bg-collaborative-primary"></div>
-                    <span className="text-sm font-medium">Sage is thinking...</span>
+            </div>
+          </header>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 p-3 bg-pastel-peach-50 border border-pastel-peach-200 text-collaborative-error rounded-lg">
+              <div className="flex items-start justify-between">
+                <span className="flex-1 text-sm pr-2">{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-collaborative-error hover:opacity-80 transition-opacity flex-shrink-0"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Persona Panel */}
+          <div className="mt-4">
+            <PersonaPanel persona={sagePersona} />
+          </div>
+
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col min-h-0 mt-4">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-collaborative-surface rounded-lg border border-pastel-purple-100">
+              {messages.length === 0 ? (
+                <div className="text-center text-collaborative-text-light mt-8">
+                  <p className="heading-sm text-collaborative-text">Start a conversation with Sage</p>
+                  <p className="text-sm mt-2">Welcome to your therapeutic journey</p>
+                  <div className="mt-4 inline-block px-4 py-2 bg-pastel-purple-50 rounded-full text-xs text-brand">
+                    ✨ Powered by Collaborative Solutions
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                messages.map((message) => (
+                  <MessageBubble key={message.id} message={message} />
+                ))
+              )}
+              
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="flex justify-start mb-4">
+                  <div className="bg-pastel-purple-100 text-collaborative-text px-4 py-3 rounded-lg border border-pastel-purple-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="animate-pulse-soft rounded-full h-4 w-4 bg-collaborative-primary"></div>
+                      <span className="text-sm font-medium">Sage is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
-          {/* Message Input */}
-          <div className="border-t border-pastel-purple-100 bg-collaborative-surface p-4">
-            <MessageInput 
-              onSendMessage={handleSendMessage} 
-              disabled={isLoading || !currentUser} 
-            />
+            {/* Message Input */}
+            <div className="border-t border-pastel-purple-100 bg-collaborative-surface p-4 rounded-b-lg">
+              <MessageInput 
+                onSendMessage={handleSendMessage} 
+                disabled={isLoading || !currentUser} 
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Memory Sidebar */}
+      {/* Memory Sidebar - Outside main content flow */}
       <MemorySidebar
         memoryData={memoryData}
         isOpen={isMemorySidebarOpen}
@@ -398,19 +405,19 @@ const MessageInput: React.FC<{
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex space-x-4">
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
       <input
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         placeholder={disabled ? "Please wait..." : "Type your message..."}
         disabled={disabled}
-        className="flex-1 p-3 input-pastel disabled:opacity-50 disabled:cursor-not-allowed"
+        className="flex-1 p-3 input-pastel disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
       />
       <button
         type="submit"
         disabled={disabled || !message.trim()}
-        className="button-primary disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3"
+        className="button-primary disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 w-full sm:w-auto"
       >
         Send
       </button>

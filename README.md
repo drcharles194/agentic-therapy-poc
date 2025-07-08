@@ -9,6 +9,13 @@ This is a monorepo containing:
 - **Backend**: FastAPI + Python with LangChain orchestration and Neo4j graph database
 - **Frontend**: React + Vite + TypeScript with modern UI components
 
+### GraphRAG Implementation
+
+We maintain **two GraphRAG implementations** under consideration:
+
+1. **Custom Implementation** (`backend/services/graphrag.py`) - Optimized with pre-computed embeddings
+2. **Official Neo4j GraphRAG** (`backend/services/official_graphrag.py`) - Uses the official neo4j-graphrag package
+
 ## 🚀 Quick Start
 
 ### Prerequisites
@@ -145,6 +152,8 @@ This is a **Full-Stack** implementation featuring:
 - ✅ **Graph Database**: Neo4j for complex relationship storage
 - ✅ **API Integration**: Complete backend/frontend communication
 - ✅ **Error Handling**: Robust fallback mechanisms
+- ✅ **GraphRAG Optimization**: Dynamic retriever creation with pre-computed embeddings
+- ✅ **Therapist Portal**: Accordion UI for analysis results
 
 ## 🚧 Development Workflow
 
@@ -156,6 +165,7 @@ The project was developed in chunks with separate branches for review:
 4. **chunk4-backend-apis** - Core API endpoints implementation ✅
 5. **chunk5-real-services** - Live Claude API and Neo4j integration ✅
 6. **chunk6-intelligent-memory** - Advanced memory processing and storage ✅
+7. **chunk7-demo-improvements** - Added therapist portal (w/GraphRAG) & UI/UX changes ✅
 
 ## 🔧 Technical Features
 
@@ -165,6 +175,9 @@ The project was developed in chunks with separate branches for review:
 - **Real-time Processing**: Live API integration with intelligent caching
 - **Modern Frontend**: React with TypeScript and Tailwind CSS
 - **Robust Architecture**: Comprehensive error handling and monitoring
+- **GraphRAG Performance**: Optimized vector search with pre-computed embeddings
+- **Dynamic Resource Management**: User-specific retriever creation and filtering
+- **Structured Analysis**: Organized therapeutic insights with accordion UI
 
 ## 📄 License
 

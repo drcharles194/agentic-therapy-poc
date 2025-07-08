@@ -57,6 +57,42 @@ export interface UpdateUserRequest {
   name: string
 }
 
+export interface TherapistQueryRequest {
+  query: string
+  context?: Record<string, any>
+}
+
+export interface TherapistQueryResponse {
+  query: string
+  user_id: string
+  user_name: string
+  response: string
+  confidence: number
+  data_sources: string[]
+  timestamp: string
+}
+
+export interface GraphRAGComparisonResult {
+  implementation: string
+  response: string
+  confidence: number
+  data_sources: string[]
+  processing_time_ms: number
+  indexes_used: string[]
+  retrieval_method: string
+  error?: string
+}
+
+export interface GraphRAGComparisonResponse {
+  query: string
+  user_id: string
+  user_name: string
+  custom_result: GraphRAGComparisonResult
+  official_result: GraphRAGComparisonResult
+  total_processing_time_ms: number
+  timestamp: string
+}
+
 export const apiClient = {
   // Chat endpoint
   sendMessage: async (chatData: ChatMessage): Promise<ChatResponse> => {
@@ -94,6 +130,18 @@ export const apiClient = {
 
   updateUser: async (userId: string, request: UpdateUserRequest): Promise<User> => {
     const response = await api.put<User>(`/users/${userId}`, request)
+    return response.data
+  },
+
+  // Therapist GraphRAG Query API Method
+  queryUserData: async (userId: string, request: TherapistQueryRequest): Promise<TherapistQueryResponse> => {
+    const response = await api.post<TherapistQueryResponse>(`/users/${userId}/query`, request)
+    return response.data
+  },
+
+  // GraphRAG Comparison API Method
+  compareGraphRAG: async (userId: string, request: TherapistQueryRequest): Promise<GraphRAGComparisonResponse> => {
+    const response = await api.post<GraphRAGComparisonResponse>(`/users/${userId}/query/compare`, request)
     return response.data
   }
 }

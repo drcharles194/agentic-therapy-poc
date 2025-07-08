@@ -4,8 +4,7 @@ Anthropic Claude API service for generating Sage responses.
 import logging
 from typing import Dict, Any, Optional
 
-from langchain_anthropic import ChatAnthropic
-from langchain.schema import HumanMessage, SystemMessage
+import anthropic
 
 from backend.config import settings
 
@@ -23,11 +22,8 @@ class AnthropicService:
         """Initialize the Anthropic client."""
         try:
             if settings.anthropic_api_key and settings.anthropic_api_key != "test_key":
-                self.client = ChatAnthropic(
-                    anthropic_api_key=settings.anthropic_api_key,
-                    model="claude-sonnet-4-20250514",  # Correct Claude 4 Sonnet model name
-                    max_tokens=500,  # Allow for more nuanced therapeutic responses  
-                    temperature=0.8,  # Slightly higher for more natural conversation
+                self.client = anthropic.Anthropic(
+                    api_key=settings.anthropic_api_key
                 )
                 logger.info("Anthropic Claude client initialized")
             else:
@@ -53,22 +49,30 @@ class AnthropicService:
             return self._generate_fallback_response(user_message)
         
         try:
-            # Create the message chain
+            # Create the messages for Claude
             messages = [
-                SystemMessage(content=rendered_prompt),
-                HumanMessage(content=user_message)
+                {
+                    "role": "user",
+                    "content": user_message
+                }
             ]
             
-            # Generate response
-            response = await self.client.agenerate([messages])
+            # Generate response using the direct Anthropic client
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=500,
+                temperature=0.8,
+                system=rendered_prompt,
+                messages=messages
+            )
             
             # Extract the response text
-            sage_response = response.generations[0][0].text.strip()
+            sage_response = response.content[0].text.strip()
             
             # Ensure response follows Sage guidelines
             sage_response = self._ensure_sage_tone(sage_response)
             
-            # Log successful API call (tokens not available from LangChain Anthropic)
+            # Log successful API call
             total_chars = len(rendered_prompt) + len(user_message) + len(sage_response)
             logger.info(f"Claude API call - Input: {len(rendered_prompt + user_message)} chars, Output: {len(sage_response)} chars")
             logger.info(f"Generated Sage response via Claude API ({len(sage_response)} chars)")
@@ -139,13 +143,15 @@ class AnthropicService:
                 }
             
             # Test with a simple prompt
-            test_messages = [
-                SystemMessage(content="You are a helpful assistant. Respond with exactly 'OK' to confirm you're working."),
-                HumanMessage(content="Test connection")
-            ]
+            response = self.client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=10,
+                temperature=0.1,
+                system="You are a helpful assistant. Respond with exactly 'OK' to confirm you're working.",
+                messages=[{"role": "user", "content": "Test connection"}]
+            )
             
-            response = await self.client.agenerate([test_messages])
-            response_text = response.generations[0][0].text.strip()
+            response_text = response.content[0].text.strip()
             
             if response_text:
                 return {"status": "healthy", "message": f"Claude API responding (test: {response_text[:20]}...)"}
@@ -161,9 +167,9 @@ class AnthropicService:
             return {"model": "fallback", "status": "unavailable"}
         
         return {
-            "model": self.client.model,
-            "max_tokens": self.client.max_tokens,
-            "temperature": self.client.temperature,
+            "model": "claude-sonnet-4-20250514",
+            "max_tokens": 500,
+            "temperature": 0.8,
             "status": "configured"
         }
 
