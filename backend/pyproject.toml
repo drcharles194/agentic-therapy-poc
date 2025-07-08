@@ -7,17 +7,14 @@ readme = "README.md"
 packages = [{include = "backend"}]
 
 [tool.poetry.dependencies]
-python = "^3.11"
+python = ">=3.13,<3.14"
 # FastAPI and web framework
 fastapi = "^0.104.1"
 uvicorn = {extras = ["standard"], version = "^0.24.0"}
 python-multipart = "^0.0.6"
 
 # LangChain and AI
-langchain = "^0.2.0"
-langchain-anthropic = "^0.1.23"
-langchain-community = "^0.2.0"
-anthropic = "^0.30.0"
+anthropic = "^0.49.0"
 
 # Neo4j database
 neo4j = "^5.15.0"
@@ -38,6 +35,8 @@ jinja2 = "^3.1.2"
 
 # Date and time utilities
 python-dateutil = "^2.8.2"
+neo4j-graphrag = {extras = ["anthropic"], version = "^1.8.0"}
+openai = "^1.93.1"
 
 [tool.poetry.group.dev.dependencies]
 pytest = "^7.4.3"

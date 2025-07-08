@@ -4,11 +4,10 @@
 
 @layer base {
   * {
-    @apply border-gray-200;
+    @apply border-neutral-200;
   }
   body {
-    @apply bg-gray-50 text-gray-900;
-    font-family: 'Inter', system-ui, sans-serif;
+    @apply bg-collaborative-background text-collaborative-text font-sans;
   }
 }
 
@@ -22,6 +21,74 @@
   }
   
   .persona-gradient {
-    background: linear-gradient(135deg, #8b5cf6 0%, #06b6d4 100%);
+    background: linear-gradient(135deg, #8a2be2 0%, #a855f7 50%, #d8b4fe 100%);
+  }
+  
+  .brand-gradient {
+    background: linear-gradient(135deg, #8a2be2 0%, #6a1ba2 100%);
+  }
+  
+  .pastel-gradient {
+    background: linear-gradient(135deg, #faf7ff 0%, #f3e8ff 50%, #e9d5ff 100%);
+  }
+  
+  .button-primary {
+    @apply bg-collaborative-primary text-white px-4 py-2 rounded-lg hover:bg-brand-dark transition-colors duration-200 shadow-sm;
+  }
+  
+  .button-secondary {
+    @apply bg-pastel-purple-100 text-collaborative-primary px-4 py-2 rounded-lg hover:bg-pastel-purple-200 transition-colors duration-200 border border-pastel-purple-200;
+  }
+  
+  .button-accent {
+    @apply bg-collaborative-accent text-collaborative-text px-4 py-2 rounded-lg hover:bg-pastel-cream-300 transition-colors duration-200 shadow-sm;
+  }
+  
+  .card-pastel {
+    @apply bg-collaborative-surface border border-pastel-purple-100 rounded-lg shadow-sm;
+  }
+  
+  .input-pastel {
+    @apply border-pastel-purple-200 rounded-lg focus:ring-2 focus:ring-collaborative-primary focus:border-transparent bg-collaborative-surface text-collaborative-text;
+  }
+  
+  .text-brand {
+    @apply text-collaborative-primary;
+  }
+  
+  .text-secondary {
+    @apply text-collaborative-text-light;
+  }
+  
+  .bg-accent-soft {
+    @apply bg-pastel-purple-50;
+  }
+  
+  .sidebar-gradient {
+    background: linear-gradient(180deg, #faf7ff 0%, #f3e8ff 100%);
+  }
+  
+  .heading {
+    @apply font-heading;
+  }
+  
+  .heading-xl {
+    @apply font-heading text-4xl font-semibold;
+  }
+  
+  .heading-lg {
+    @apply font-heading text-3xl font-semibold;
+  }
+  
+  .heading-md {
+    @apply font-heading text-2xl font-medium;
+  }
+  
+  .heading-sm {
+    @apply font-heading text-xl font-medium;
+  }
+  
+  .heading-xs {
+    @apply font-heading text-lg font-medium;
   }
 } 

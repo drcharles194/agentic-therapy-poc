@@ -30,6 +30,9 @@ class Settings(BaseSettings):
     # Anthropic/Claude Configuration
     anthropic_api_key: str = Field(default="test_key", env="ANTHROPIC_API_KEY")
     
+    # OpenAI Configuration  
+    openai_api_key: str = Field(default="test_key", env="OPENAI_API_KEY")
+    
     # CORS Settings
     allowed_origins: List[str] = Field(
         default=["http://localhost:5173", "http://127.0.0.1:5173"],

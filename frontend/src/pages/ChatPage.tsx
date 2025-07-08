@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { PersonaPanel, MessageBubble, MemorySidebar } from '../components'
-import { apiClient, type MemoryData } from '../utils/api'
+import { apiClient, type MemoryData, type User } from '../utils/api'
 
 const ChatPage: React.FC = () => {
   const [messages, setMessages] = useState<Array<{
@@ -13,7 +13,14 @@ const ChatPage: React.FC = () => {
   const [memoryData, setMemoryData] = useState<MemoryData | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [userId] = useState(() => `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`)
+  
+  // User management state
+  const [currentUser, setCurrentUser] = useState<User | null>(null)
+  const [allUsers, setAllUsers] = useState<User[]>([])
+  const [isCreatingUser, setIsCreatingUser] = useState(false)
+  const [showUserDropdown, setShowUserDropdown] = useState(false)
+  const [editingName, setEditingName] = useState(false)
+  const [editNameValue, setEditNameValue] = useState('')
 
   const sagePersona = {
     name: 'Sage',
@@ -21,24 +28,115 @@ const ChatPage: React.FC = () => {
     description: 'A compassionate guide offering gentle wisdom and therapeutic support'
   }
 
-  // Load memory data when the component mounts
+  // Initialize user on component mount
   useEffect(() => {
-    const loadMemory = async () => {
-      console.log('Loading initial memory for user:', userId)
-      try {
-        const memory = await apiClient.getMemory(userId)
-        setMemoryData(memory)
-        console.log('Initial memory loaded successfully for user:', userId)
-      } catch (error) {
-        console.log('Memory not found for new user:', userId)
-        // This is expected for new users, so we don't set an error
-      }
+    initializeUser()
+  }, [])
+
+  // Load memory when current user changes
+  useEffect(() => {
+    if (currentUser) {
+      loadMemoryForUser(currentUser.user_id)
     }
-    loadMemory()
-  }, [userId])
+  }, [currentUser])
+
+  const initializeUser = async () => {
+    try {
+      // Try to load existing users first
+      const usersResponse = await apiClient.getAllUsers()
+      setAllUsers(usersResponse.users)
+
+      // If there are existing users, use the most recent one
+      if (usersResponse.users.length > 0) {
+        setCurrentUser(usersResponse.users[0]) // Already sorted by last_active
+      } else {
+        // Create first user with auto-generated friendly name
+        await createNewUser()
+      }
+    } catch (error) {
+      console.error('Error initializing user:', error)
+      setError('Failed to initialize user. Please refresh the page.')
+    }
+  }
+
+  const createNewUser = async (customName?: string) => {
+    setIsCreatingUser(true)
+    try {
+      const newUser = await apiClient.createUser({ name: customName })
+      setCurrentUser(newUser)
+      
+      // Refresh users list
+      const usersResponse = await apiClient.getAllUsers()
+      setAllUsers(usersResponse.users)
+      
+      // Clear any existing messages for fresh start
+      setMessages([])
+      setMemoryData(null)
+      
+    } catch (error) {
+      console.error('Error creating user:', error)
+      setError('Failed to create new user. Please try again.')
+    } finally {
+      setIsCreatingUser(false)
+    }
+  }
+
+  const switchToUser = async (userId: string) => {
+    const user = allUsers.find(u => u.user_id === userId)
+    if (user) {
+      setCurrentUser(user)
+      setMessages([]) // Clear current conversation
+      setShowUserDropdown(false)
+    }
+  }
+
+  const loadMemoryForUser = async (userId: string) => {
+    try {
+      const memory = await apiClient.getMemory(userId)
+      setMemoryData(memory)
+    } catch (error) {
+      console.log('No memory found for user:', userId)
+      setMemoryData(null)
+    }
+  }
+
+  const handleUpdateUserName = async () => {
+    if (!currentUser || !editNameValue.trim()) return
+
+    try {
+      const updatedUser = await apiClient.updateUser(currentUser.user_id, { 
+        name: editNameValue.trim() 
+      })
+      setCurrentUser(updatedUser)
+      
+      // Update in users list
+      setAllUsers(prev => prev.map(u => 
+        u.user_id === updatedUser.user_id ? updatedUser : u
+      ))
+      
+      setEditingName(false)
+      setEditNameValue('')
+    } catch (error: any) {
+      console.error('Error updating user name:', error)
+      const errorMessage = error.message || 'Failed to update name'
+      setError(errorMessage)
+    }
+  }
+
+  const startEditingName = () => {
+    if (currentUser) {
+      setEditNameValue(currentUser.name)
+      setEditingName(true)
+    }
+  }
+
+  const cancelEditingName = () => {
+    setEditingName(false)
+    setEditNameValue('')
+  }
 
   const handleSendMessage = async (content: string) => {
-    if (isLoading) return
+    if (isLoading || !currentUser) return
     
     setError(null)
     setIsLoading(true)
@@ -56,7 +154,7 @@ const ChatPage: React.FC = () => {
       // Call the backend API
       const response = await apiClient.sendMessage({
         message: content,
-        user_id: userId
+        user_id: currentUser.user_id
       })
 
       // Add Sage response
@@ -69,14 +167,7 @@ const ChatPage: React.FC = () => {
       setMessages(prev => [...prev, sageResponse])
 
       // Refresh memory data after the conversation
-      try {
-        console.log('Refreshing memory after message for user:', userId)
-        const updatedMemory = await apiClient.getMemory(userId)
-        setMemoryData(updatedMemory)
-        console.log('Memory refreshed successfully after message for user:', userId)
-      } catch (memoryError) {
-        console.log('Could not update memory:', memoryError)
-      }
+      await loadMemoryForUser(currentUser.user_id)
 
     } catch (error) {
       setError('Failed to send message. Please try again.')
@@ -90,93 +181,205 @@ const ChatPage: React.FC = () => {
   }
 
   const handleViewMemory = async () => {
+    if (!currentUser) return
+
     // Only fetch memory if we don't already have it
     if (!memoryData) {
-      try {
-        const memory = await apiClient.getMemory(userId)
-        setMemoryData(memory)
-      } catch (error) {
-        console.error('Error loading memory:', error)
-        setError('Failed to load memory data')
-        return
-      }
+      await loadMemoryForUser(currentUser.user_id)
     }
     setIsMemorySidebarOpen(true)
   }
 
-  return (
-    <div className="min-h-screen bg-gray-50 flex">
-      <div className="flex-1 flex flex-col max-w-4xl mx-auto">
-        {/* Header */}
-        <header className="bg-white shadow-sm border-b p-4">
-          <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900">
-              Agentic Therapy
-            </h1>
-            <button
-              onClick={handleViewMemory}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"
-              disabled={isLoading}
-            >
-              View Memory
-            </button>
-          </div>
-        </header>
-
-        {/* Error Message */}
-        {error && (
-          <div className="mx-4 mt-4 p-3 bg-red-100 border border-red-300 text-red-700 rounded-md">
-            {error}
-            <button
-              onClick={() => setError(null)}
-              className="ml-2 text-red-500 hover:text-red-700"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {/* Persona Panel */}
-        <div className="p-4">
-          <PersonaPanel persona={sagePersona} />
+  if (!currentUser && !isCreatingUser) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
         </div>
+      </div>
+    )
+  }
 
-        {/* Chat Area */}
-        <div className="flex-1 flex flex-col">
-          {/* Messages */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="text-center text-gray-500 mt-8">
-                <p>Start a conversation with Sage</p>
-                <p className="text-sm mt-2">Your unique ID: {userId}</p>
+  return (
+    <div className="min-h-screen bg-collaborative-background">
+      {/* Main Content */}
+      <div className="w-full max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* Header */}
+          <header className="bg-collaborative-surface shadow-sm border-b border-pastel-purple-100 p-3 md:p-4 rounded-t-lg">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 min-w-0 flex-1">
+                {/* Logo */}
+                <div className="flex items-center flex-shrink-0">
+                  <img 
+                    src="/assets/collaborative-logo.png" 
+                    alt="Collaborative Solutions" 
+                    className="h-8 md:h-10 w-auto"
+                  />
+                </div>
+                
+                {/* User Info & Controls */}
+                {currentUser && (
+                  <div className="flex items-center space-x-2 min-w-0">
+                    <span className="text-collaborative-text-light flex-shrink-0 text-sm">Hello,</span>
+                    {editingName ? (
+                      <div className="flex items-center space-x-2 min-w-0">
+                        <input
+                          type="text"
+                          value={editNameValue}
+                          onChange={(e) => setEditNameValue(e.target.value)}
+                          className="px-2 py-1 input-pastel text-sm min-w-0 w-20 sm:w-28"
+                          onKeyDown={(e) => e.key === 'Enter' && handleUpdateUserName()}
+                          autoFocus
+                        />
+                        <button
+                          onClick={handleUpdateUserName}
+                          className="text-collaborative-success hover:text-pastel-mint-400 text-sm transition-colors flex-shrink-0"
+                        >
+                          ✓
+                        </button>
+                        <button
+                          onClick={cancelEditingName}
+                          className="text-collaborative-error hover:opacity-80 text-sm transition-colors flex-shrink-0"
+                        >
+                          ✗
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={startEditingName}
+                        className="text-brand font-medium hover:text-brand-dark transition-colors truncate max-w-28 sm:max-w-40 text-sm"
+                      >
+                        {currentUser.name}
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
-            ) : (
-              messages.map((message) => (
-                <MessageBubble key={message.id} message={message} />
-              ))
-            )}
-            
-            {/* Loading indicator */}
-            {isLoading && (
-              <div className="flex justify-start mb-4">
-                <div className="bg-gray-200 text-gray-800 px-4 py-2 rounded-lg">
-                  <div className="flex items-center space-x-2">
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                    <span className="text-sm">Sage is thinking...</span>
+
+              <div className="flex items-center space-x-2 w-full sm:w-auto">
+                {/* User Dropdown */}
+                <div className="relative flex-1 sm:flex-initial">
+                  <button
+                    onClick={() => setShowUserDropdown(!showUserDropdown)}
+                    className="button-secondary text-xs font-medium w-full sm:w-auto whitespace-nowrap px-2 sm:px-3 py-2"
+                  >
+                    <span className="hidden sm:inline">Switch User ({allUsers.length})</span>
+                    <span className="sm:hidden">Users ({allUsers.length})</span>
+                  </button>
+                  
+                  {showUserDropdown && (
+                    <div className="absolute right-0 mt-2 w-full sm:w-60 card-pastel shadow-lg z-10">
+                      <div className="p-2">
+                        <button
+                          onClick={() => { createNewUser(); setShowUserDropdown(false); }}
+                          className="w-full text-left px-3 py-2 text-sm text-brand hover:bg-pastel-purple-50 rounded transition-colors"
+                          disabled={isCreatingUser}
+                        >
+                          + Create New User
+                        </button>
+                        
+                        {allUsers.length > 0 && (
+                          <div className="border-t border-pastel-purple-100 mt-2 pt-2">
+                            {allUsers.map(user => (
+                              <button
+                                key={user.user_id}
+                                onClick={() => switchToUser(user.user_id)}
+                                className={`w-full text-left px-3 py-2 text-sm rounded transition-colors hover:bg-pastel-purple-50 ${
+                                  currentUser?.user_id === user.user_id 
+                                    ? 'bg-pastel-purple-100 text-brand border border-pastel-purple-200' 
+                                    : 'text-collaborative-text'
+                                }`}
+                              >
+                                <div className="font-medium truncate">{user.name}</div>
+                                <div className="text-xs text-collaborative-text-light truncate">
+                                  {user.moment_count} conversations
+                                </div>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleViewMemory}
+                  className="button-primary disabled:opacity-50 disabled:cursor-not-allowed flex-shrink-0 px-2 sm:px-4 py-2 text-xs"
+                  disabled={isLoading || !currentUser}
+                >
+                  <span className="hidden sm:inline">View Memory</span>
+                  <span className="sm:hidden">Memory</span>
+                </button>
+              </div>
+            </div>
+          </header>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mt-4 p-3 bg-pastel-peach-50 border border-pastel-peach-200 text-collaborative-error rounded-lg">
+              <div className="flex items-start justify-between">
+                <span className="flex-1 text-sm pr-2">{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="text-collaborative-error hover:opacity-80 transition-opacity flex-shrink-0"
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Persona Panel */}
+          <div className="mt-4">
+            <PersonaPanel persona={sagePersona} />
+          </div>
+
+          {/* Chat Area */}
+          <div className="flex-1 flex flex-col min-h-0 mt-4">
+            {/* Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-4 bg-collaborative-surface rounded-lg border border-pastel-purple-100">
+              {messages.length === 0 ? (
+                <div className="text-center text-collaborative-text-light mt-8">
+                  <p className="heading-sm text-collaborative-text">Start a conversation with Sage</p>
+                  <p className="text-sm mt-2">Welcome to your therapeutic journey</p>
+                  <div className="mt-4 inline-block px-4 py-2 bg-pastel-purple-50 rounded-full text-xs text-brand">
+                    ✨ Powered by Collaborative Solutions
                   </div>
                 </div>
-              </div>
-            )}
-          </div>
+              ) : (
+                messages.map((message) => (
+                  <MessageBubble key={message.id} message={message} />
+                ))
+              )}
+              
+              {/* Loading indicator */}
+              {isLoading && (
+                <div className="flex justify-start mb-4">
+                  <div className="bg-pastel-purple-100 text-collaborative-text px-4 py-3 rounded-lg border border-pastel-purple-200">
+                    <div className="flex items-center space-x-3">
+                      <div className="animate-pulse-soft rounded-full h-4 w-4 bg-collaborative-primary"></div>
+                      <span className="text-sm font-medium">Sage is thinking...</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
-          {/* Message Input */}
-          <div className="border-t bg-white p-4">
-            <MessageInput onSendMessage={handleSendMessage} disabled={isLoading} />
+            {/* Message Input */}
+            <div className="border-t border-pastel-purple-100 bg-collaborative-surface p-4 rounded-b-lg">
+              <MessageInput 
+                onSendMessage={handleSendMessage} 
+                disabled={isLoading || !currentUser} 
+              />
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Memory Sidebar */}
+      {/* Memory Sidebar - Outside main content flow */}
       <MemorySidebar
         memoryData={memoryData}
         isOpen={isMemorySidebarOpen}
@@ -202,19 +405,19 @@ const MessageInput: React.FC<{
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex space-x-2">
+    <form onSubmit={handleSubmit} className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-4">
       <input
         type="text"
         value={message}
         onChange={(e) => setMessage(e.target.value)}
-        placeholder="Type your message..."
-        className="flex-1 px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+        placeholder={disabled ? "Please wait..." : "Type your message..."}
         disabled={disabled}
+        className="flex-1 p-3 input-pastel disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
       />
       <button
         type="submit"
-        className="px-6 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
         disabled={disabled || !message.trim()}
+        className="button-primary disabled:opacity-50 disabled:cursor-not-allowed px-6 py-3 w-full sm:w-auto"
       >
         Send
       </button>

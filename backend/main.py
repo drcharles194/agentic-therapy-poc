@@ -11,9 +11,10 @@ from starlette.exceptions import HTTPException
 
 from backend.config import settings
 from backend.models.schema import ErrorResponse
-from backend.routers import chat
+from backend.routers import chat, users
 from backend.services.neo4j import neo4j_service
 from backend.services.anthropic_service import anthropic_service
+from backend.services.official_graphrag import initialize_official_graphrag_service
 
 
 # Configure logging
@@ -46,6 +47,14 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"Failed to initialize Anthropic service: {e}")
         logger.warning("Anthropic service will fall back to mock responses")
+    
+    try:
+        logger.info("Initializing Official GraphRAG service...")
+        initialize_official_graphrag_service(neo4j_service)
+        logger.info("Official GraphRAG service initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize Official GraphRAG service: {e}")
+        logger.warning("Official GraphRAG service will fall back to unavailable responses")
     
     yield
     
@@ -127,6 +136,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(chat.router, tags=["chat"])
+app.include_router(users.router, tags=["users"])
 
 
 # Root endpoint

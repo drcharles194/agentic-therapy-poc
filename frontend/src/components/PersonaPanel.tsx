@@ -11,21 +11,21 @@ interface PersonaPanelProps {
 
 const PersonaPanel: React.FC<PersonaPanelProps> = ({ persona }) => {
   return (
-    <div className="bg-white rounded-lg shadow-md p-6 mb-6">
+    <div className="card-pastel p-6 mb-6">
       <div className="flex items-center mb-4">
-        <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-          <span className="text-blue-600 font-semibold text-lg">
+        <div className="w-12 h-12 bg-pastel-purple-100 rounded-full flex items-center justify-center border-2 border-pastel-purple-200">
+          <span className="text-brand font-semibold text-lg">
             {persona.name.charAt(0)}
           </span>
         </div>
         <div className="ml-4">
-          <h3 className="text-xl font-semibold text-gray-800">
+          <h3 className="heading-md text-collaborative-text">
             {persona.name}
           </h3>
-          <p className="text-sm text-gray-600">{persona.role}</p>
+          <p className="text-sm text-collaborative-text-light font-medium">{persona.role}</p>
         </div>
       </div>
-      <p className="text-gray-700">{persona.description}</p>
+      <p className="text-collaborative-text leading-relaxed">{persona.description}</p>
     </div>
   )
 }

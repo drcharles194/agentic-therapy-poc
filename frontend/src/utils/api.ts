@@ -20,47 +20,14 @@ export interface ChatResponse {
 
 export interface MemoryData {
   user_id: string
-  user_name: string
+  user_name?: string
   sage: {
-    moments: Array<{
-      id: string
-      timestamp: string
-      context: string
-      session_id: string
-    }>
-    emotions: Array<{
-      id: string
-      label: string
-      intensity: number
-      nuance?: string
-      bodily_sensation?: string
-    }>
-    reflections: Array<{
-      id: string
-      content: string
-      insight_type: string
-      depth_level: number
-      confidence: number
-    }>
-    values: Array<{
-      id: string
-      name: string
-      description: string
-      importance: number
-    }>
-    patterns: Array<{
-      id: string
-      description: string
-      pattern_type: string
-      frequency: string
-    }>
-    notes: Array<{
-      id: string
-      persona: string
-      note_type: string
-      content: string
-      created_at: string
-    }>
+    moments: Array<any>
+    emotions: Array<any>
+    reflections: Array<any>
+    values: Array<any>
+    patterns: Array<any>
+    notes: Array<any>
   }
 }
 
@@ -72,6 +39,58 @@ export interface HealthResponse {
     neo4j: string
     anthropic: string
   }
+}
+
+export interface User {
+  user_id: string
+  name: string
+  created_at: string
+  last_active: string
+  moment_count: number
+}
+
+export interface CreateUserRequest {
+  name?: string
+}
+
+export interface UpdateUserRequest {
+  name: string
+}
+
+export interface TherapistQueryRequest {
+  query: string
+  context?: Record<string, any>
+}
+
+export interface TherapistQueryResponse {
+  query: string
+  user_id: string
+  user_name: string
+  response: string
+  confidence: number
+  data_sources: string[]
+  timestamp: string
+}
+
+export interface GraphRAGComparisonResult {
+  implementation: string
+  response: string
+  confidence: number
+  data_sources: string[]
+  processing_time_ms: number
+  indexes_used: string[]
+  retrieval_method: string
+  error?: string
+}
+
+export interface GraphRAGComparisonResponse {
+  query: string
+  user_id: string
+  user_name: string
+  custom_result: GraphRAGComparisonResult
+  official_result: GraphRAGComparisonResult
+  total_processing_time_ms: number
+  timestamp: string
 }
 
 export const apiClient = {
@@ -90,6 +109,39 @@ export const apiClient = {
   // Health check endpoint
   healthCheck: async (): Promise<HealthResponse> => {
     const response = await api.post<HealthResponse>('/healthcheck')
+    return response.data
+  },
+
+  // User Management API Methods
+  createUser: async (request: CreateUserRequest = {}): Promise<User> => {
+    const response = await api.post<User>('/users/', request)
+    return response.data
+  },
+
+  getAllUsers: async (): Promise<{ users: User[] }> => {
+    const response = await api.get<{ users: User[] }>('/users/')
+    return response.data
+  },
+
+  getUser: async (userId: string): Promise<User> => {
+    const response = await api.get<User>(`/users/${userId}`)
+    return response.data
+  },
+
+  updateUser: async (userId: string, request: UpdateUserRequest): Promise<User> => {
+    const response = await api.put<User>(`/users/${userId}`, request)
+    return response.data
+  },
+
+  // Therapist GraphRAG Query API Method
+  queryUserData: async (userId: string, request: TherapistQueryRequest): Promise<TherapistQueryResponse> => {
+    const response = await api.post<TherapistQueryResponse>(`/users/${userId}/query`, request)
+    return response.data
+  },
+
+  // GraphRAG Comparison API Method
+  compareGraphRAG: async (userId: string, request: TherapistQueryRequest): Promise<GraphRAGComparisonResponse> => {
+    const response = await api.post<GraphRAGComparisonResponse>(`/users/${userId}/query/compare`, request)
     return response.data
   }
 }
