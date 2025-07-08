@@ -168,7 +168,15 @@ Review this conversation and identify ONLY NEW content worth storing:
 - Genuinely NEW or significantly different from existing memories
 - Respectful of the user's privacy and autonomy
 
-Respond in this exact JSON format:
+**JSON FORMATTING REQUIREMENTS:**
+- Respond ONLY with valid JSON - no extra text before or after
+- Use double quotes for all strings
+- Escape any internal quotes with backslashes
+- Keep arrays short - maximum 3 items per category
+- Ensure all braces and brackets are properly closed
+- If you have nothing meaningful for a category, use an empty array []
+
+Respond in this exact JSON format (no extra text):
 {{
   "should_store": true/false,
   "moment_title": "Therapeutic title (3-6 words): focus on core emotional/psychological theme, use clinical but compassionate language",
@@ -252,7 +260,7 @@ Respond in this exact JSON format:
                 "Please analyze this conversation for memory storage."
             )
             
-            # Parse the JSON response
+            # Parse the JSON response with improved error handling
             try:
                 # Strip markdown code blocks if present
                 clean_response = analysis_response.strip()
@@ -263,6 +271,13 @@ Respond in this exact JSON format:
                 elif clean_response.startswith('```'):
                     clean_response = re.sub(r'^```\s*', '', clean_response)
                 
+                # Log the full response for debugging if it's reasonably sized
+                if len(clean_response) < 5000:
+                    logger.debug(f"Clean Claude response for user {user_id}: {clean_response}")
+                else:
+                    logger.debug(f"Large Claude response for user {user_id}: {len(clean_response)} chars")
+                
+                # Try to parse the JSON
                 analysis_data = json.loads(clean_response.strip())
                 
                 # Debug log the structure for troubleshooting
@@ -279,8 +294,40 @@ Respond in this exact JSON format:
                     logger.debug(f"Claude proposed memory counts for user {user_id}: {counts}")
                     
             except json.JSONDecodeError as e:
-                logger.warning(f"Failed to parse analysis JSON: {e}. Raw response: {analysis_response[:200]}...")
-                return {"should_store": False, "reasoning": "Failed to parse analysis"}
+                logger.warning(f"Failed to parse analysis JSON: {e}")
+                logger.warning(f"JSON error at line {getattr(e, 'lineno', '?')}, column {getattr(e, 'colno', '?')}")
+                logger.warning(f"Raw response length: {len(analysis_response)} chars")
+                
+                # Try to find where the JSON breaks
+                try:
+                    # Look for the last valid JSON structure
+                    if '{' in clean_response and '}' in clean_response:
+                        # Find the position where JSON likely breaks
+                        brace_count = 0
+                        last_valid_pos = 0
+                        for i, char in enumerate(clean_response):
+                            if char == '{':
+                                brace_count += 1
+                            elif char == '}':
+                                brace_count -= 1
+                                if brace_count == 0:
+                                    last_valid_pos = i + 1
+                                    break
+                        
+                        if last_valid_pos > 0:
+                            truncated_json = clean_response[:last_valid_pos]
+                            logger.info(f"Attempting to parse truncated JSON ({last_valid_pos} chars)")
+                            analysis_data = json.loads(truncated_json)
+                            logger.info(f"Successfully parsed truncated JSON for user {user_id}")
+                        else:
+                            raise e
+                    else:
+                        raise e
+                except Exception as retry_e:
+                    logger.error(f"Even truncated JSON parsing failed: {retry_e}")
+                    logger.error(f"First 500 chars of response: {analysis_response[:500]}")
+                    logger.error(f"Last 500 chars of response: {analysis_response[-500:]}")
+                    return {"should_store": False, "reasoning": f"JSON parsing failed: {str(e)}"}
             
             # Add metadata
             analysis_data["user_id"] = user_id

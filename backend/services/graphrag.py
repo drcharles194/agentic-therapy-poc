@@ -259,7 +259,7 @@ class Neo4jGraphRAGService:
                     raw_data={"message": "No relevant insights found"},
                     natural_response=f"I found therapy content for {user_info.get('name', 'this user')}, but couldn't generate specific insights for your question. Please try asking about specific aspects like emotions, patterns, or recent sessions.",
                     confidence=0.25,  # Low confidence when content exists but no insights generated
-                    data_sources=list(available_indexes.keys())
+                    data_sources=[index_name_to_friendly(idx) for idx in available_indexes.keys()]
                 )
             
             # Combine results with better formatting
@@ -388,9 +388,8 @@ Unified Response (plain text only):"""
             unified_response = await self._call_llm_directly(synthesis_prompt)
             
             if unified_response and len(unified_response.strip()) > 50:
-                # Add metadata footer (plain text, no confidence in text)
-                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources"
-                return unified_response.strip() + footer
+                # Return clean response without footer text
+                return unified_response.strip()
             else:
                 # Fallback to simple combination
                 return self._create_fallback_summary(query, user_name, insights, sources)

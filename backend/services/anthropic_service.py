@@ -57,11 +57,21 @@ class AnthropicService:
                 }
             ]
             
+            # Detect if this is a memory analysis task and adjust token limits accordingly
+            is_memory_analysis = (
+                "analyze this conversation for memory storage" in user_message.lower() or
+                "respond in this exact json format" in rendered_prompt.lower() or
+                "should_store" in rendered_prompt.lower()
+            )
+            
+            max_tokens = 2000 if is_memory_analysis else 500
+            temperature = 0.3 if is_memory_analysis else 0.8  # Lower temperature for JSON structure
+            
             # Generate response using the direct Anthropic client
             response = self.client.messages.create(
                 model="claude-sonnet-4-20250514",
-                max_tokens=500,
-                temperature=0.8,
+                max_tokens=max_tokens,
+                temperature=temperature,
                 system=rendered_prompt,
                 messages=messages
             )
@@ -69,13 +79,14 @@ class AnthropicService:
             # Extract the response text
             sage_response = response.content[0].text.strip()
             
-            # Ensure response follows Sage guidelines
-            sage_response = self._ensure_sage_tone(sage_response)
+            # For non-memory analysis, ensure response follows Sage guidelines
+            if not is_memory_analysis:
+                sage_response = self._ensure_sage_tone(sage_response)
             
             # Log successful API call
             total_chars = len(rendered_prompt) + len(user_message) + len(sage_response)
-            logger.info(f"Claude API call - Input: {len(rendered_prompt + user_message)} chars, Output: {len(sage_response)} chars")
-            logger.info(f"Generated Sage response via Claude API ({len(sage_response)} chars)")
+            analysis_type = "memory analysis" if is_memory_analysis else "Sage response"
+            logger.info(f"Claude API call ({analysis_type}) - Input: {len(rendered_prompt + user_message)} chars, Output: {len(sage_response)} chars, Max tokens: {max_tokens}")
             
             return sage_response
             

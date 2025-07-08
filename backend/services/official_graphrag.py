@@ -254,7 +254,7 @@ class OfficialGraphRAGService:
             else:
                 combined_response = f"No relevant information found for user {user_info.get('name', 'this user')} regarding: {query}"
                 confidence = 0.1
-                data_sources = ["no_results"]
+                data_sources = ["No Results Found"]
             
             return OfficialGraphRAGResult(
                 query=query,
@@ -330,9 +330,8 @@ Unified Response (plain text only):"""
             unified_response = await self._call_llm_directly(synthesis_prompt)
             
             if unified_response and len(unified_response.strip()) > 50:
-                # Add metadata footer (plain text, no confidence in text)
-                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources"
-                return unified_response.strip() + footer
+                # Return clean response without footer text
+                return unified_response.strip()
             else:
                 # Fallback to simple combination
                 return self._combine_results_fallback(results, query)
