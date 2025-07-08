@@ -18,6 +18,11 @@ from neo4j_graphrag.embeddings.openai import OpenAIEmbeddings
 
 from backend.services.neo4j import Neo4jService
 from backend.config import settings
+from backend.utils.graphrag_utils import (
+    index_name_to_friendly,
+    calculate_dynamic_confidence,
+    get_user_content_check_queries
+)
 
 logger = logging.getLogger(__name__)
 
@@ -109,14 +114,8 @@ class OfficialGraphRAGService:
         try:
             # Use the same approach as custom service - sync driver session
             with self.driver.session() as session:
-                # Check content in each index type using the same approach as custom service
-                content_checks = {
-                    "therapy_moments_index": "MATCH (m:Moment {user_id: $user_id}) WHERE m.context_embedding IS NOT NULL RETURN count(m) as count",
-                    "user_reflections_index": "MATCH (r:Reflection {user_id: $user_id}) WHERE r.content_embedding IS NOT NULL RETURN count(r) as count",
-                    "therapist_notes_index": "MATCH (p:PersonaNote {user_id: $user_id}) WHERE p.content_embedding IS NOT NULL RETURN count(p) as count", 
-                    "behavior_patterns_index": "MATCH (p:Pattern {user_id: $user_id}) WHERE p.description_embedding IS NOT NULL RETURN count(p) as count",
-                    "user_values_index": "MATCH (v:Value {user_id: $user_id}) WHERE v.description_embedding IS NOT NULL RETURN count(v) as count"
-                }
+                # Check content in each index type using shared queries
+                content_checks = get_user_content_check_queries()
                 
                 indexes_with_data = []
                 for index_name, query in content_checks.items():
@@ -234,7 +233,7 @@ class OfficialGraphRAGService:
                     
                     if response and response.answer:
                         # Convert index name to user-friendly format
-                        friendly_name = self._index_name_to_friendly(index_name)
+                        friendly_name = index_name_to_friendly(index_name)
                         
                         results.append({
                             "index": index_name,
@@ -251,7 +250,7 @@ class OfficialGraphRAGService:
             # Step 4: Combine results from all indexes using Anthropic synthesis
             if results:
                 combined_response = await self._synthesize_unified_response(results, query, user_info)
-                confidence = self._calculate_confidence(results)
+                confidence = calculate_dynamic_confidence(results, implementation_type="official")
             else:
                 combined_response = f"No relevant information found for user {user_info.get('name', 'this user')} regarding: {query}"
                 confidence = 0.1
@@ -376,61 +375,7 @@ Unified Response (plain text only):"""
             logger.error(f"Direct LLM call failed: {e}")
             raise
     
-    def _index_name_to_friendly(self, index_name: str) -> str:
-        """Convert technical index names to user-friendly display names."""
-        friendly_names = {
-            "therapy_moments_index": "Therapy Moments",
-            "user_reflections_index": "User Reflections", 
-            "therapist_notes_index": "Therapist Notes",
-            "behavior_patterns_index": "Behavior Patterns",
-            "user_values_index": "User Values"
-        }
-        return friendly_names.get(index_name, index_name.replace('_index', '').replace('_', ' ').title())
 
-    def _calculate_confidence(self, results: List[Dict]) -> float:
-        """Calculate dynamic confidence based on the number and quality of results."""
-        if not results:
-            return 0.1
-        
-        # Start with base confidence based on number of data sources
-        num_sources = len(results)
-        if num_sources >= 4:
-            base_confidence = 0.85
-        elif num_sources == 3:
-            base_confidence = 0.75  
-        elif num_sources == 2:
-            base_confidence = 0.65
-        else:
-            base_confidence = 0.55
-        
-        # Adjust based on response quality and length
-        total_length = sum(len(result["answer"]) for result in results)
-        avg_length = total_length / len(results)
-        
-        # Quality multipliers
-        if avg_length > 300:  # Detailed responses
-            quality_bonus = 0.1
-        elif avg_length > 150:  # Moderate responses
-            quality_bonus = 0.05
-        elif avg_length < 50:   # Short responses
-            quality_bonus = -0.1
-        else:
-            quality_bonus = 0.0
-            
-        # Check for very short or generic responses
-        generic_indicators = ["no relevant information", "not found", "insufficient data"]
-        has_generic = any(
-            any(indicator in result["answer"].lower() for indicator in generic_indicators)
-            for result in results
-        )
-        
-        if has_generic:
-            quality_bonus -= 0.15
-        
-        final_confidence = base_confidence + quality_bonus
-        
-        # Ensure confidence stays within bounds
-        return min(max(final_confidence, 0.1), 0.95)
     
     async def _get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get basic user information using the same approach as custom service."""

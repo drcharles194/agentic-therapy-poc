@@ -13,6 +13,12 @@ from neo4j_graphrag.llm import AnthropicLLM
 
 from backend.services.neo4j import Neo4jService
 from backend.config import settings
+from backend.utils.graphrag_utils import (
+    index_name_to_friendly,
+    calculate_dynamic_confidence,
+    get_index_config,
+    get_user_content_check_queries
+)
 
 logger = logging.getLogger(__name__)
 
@@ -235,7 +241,7 @@ class Neo4jGraphRAGService:
                             result_data = {
                                 "index": index_name,
                                 "response": response_text,
-                                "source": index_name.replace('_index', '').replace('_', ' ').title(),
+                                "source": index_name_to_friendly(index_name),
                                 "content_count": available_indexes[index_name],
                                 "retrieved_items": len(relevant_content)
                             }
@@ -260,7 +266,7 @@ class Neo4jGraphRAGService:
             combined_response = await self._create_structured_response(all_results, query, user_info)
             
             # Calculate dynamic confidence based on results quality
-            confidence = self._calculate_confidence(all_results, available_indexes)
+            confidence = calculate_dynamic_confidence(all_results, available_indexes, "custom")
             
             return GraphRAGResult(
                 query=query,
@@ -283,14 +289,8 @@ class Neo4jGraphRAGService:
         """
         try:
             with self.sync_driver.session() as session:
-                # Check content in each index type
-                content_checks = {
-                    "therapy_moments_index": "MATCH (m:Moment {user_id: $user_id}) WHERE m.context_embedding IS NOT NULL RETURN count(m) as count",
-                    "user_reflections_index": "MATCH (r:Reflection {user_id: $user_id}) WHERE r.content_embedding IS NOT NULL RETURN count(r) as count",
-                    "therapist_notes_index": "MATCH (p:PersonaNote {user_id: $user_id}) WHERE p.content_embedding IS NOT NULL RETURN count(p) as count", 
-                    "behavior_patterns_index": "MATCH (p:Pattern {user_id: $user_id}) WHERE p.description_embedding IS NOT NULL RETURN count(p) as count",
-                    "user_values_index": "MATCH (v:Value {user_id: $user_id}) WHERE v.description_embedding IS NOT NULL RETURN count(v) as count"
-                }
+                # Check content in each index type using shared queries
+                content_checks = get_user_content_check_queries()
                 
                 available_indexes = {}
                 for index_name, query in content_checks.items():
@@ -427,49 +427,7 @@ Unified Response (plain text only):"""
         
         return "\n".join(response_parts)
     
-    def _calculate_confidence(self, results: List[Dict], available_indexes: Dict[str, int]) -> float:
-        """Calculate dynamic confidence based on results quality and data availability."""
-        if not results:
-            return 0.1
-        
-        num_sources = len(results)
-        total_available = len(available_indexes)
-        
-        # Base confidence on coverage and number of sources
-        coverage_ratio = num_sources / max(total_available, 1)
-        if coverage_ratio >= 0.8:  # 4/5 or 3/4 indexes
-            base_confidence = 0.85
-        elif coverage_ratio >= 0.6:  # 3/5 indexes
-            base_confidence = 0.75
-        elif coverage_ratio >= 0.4:  # 2/5 indexes
-            base_confidence = 0.65
-        else:  # 1 index
-            base_confidence = 0.55
-        
-        # Quality assessment based on retrieved items and content
-        quality_bonus = 0.0
-        total_items = sum(result.get('retrieved_items', 0) for result in results)
-        avg_items_per_source = total_items / num_sources if num_sources > 0 else 0
-        
-        # Bonus for high-quality retrieval
-        if avg_items_per_source >= 3:
-            quality_bonus += 0.1
-        elif avg_items_per_source >= 2:
-            quality_bonus += 0.05
-        elif avg_items_per_source < 1:
-            quality_bonus -= 0.1
-            
-        # Bonus for multiple data points in available indexes
-        total_content = sum(available_indexes.values())
-        if total_content >= 10:
-            quality_bonus += 0.05
-        elif total_content < 3:
-            quality_bonus -= 0.05
-        
-        final_confidence = base_confidence + quality_bonus
-        
-        # Ensure confidence stays within bounds
-        return min(max(final_confidence, 0.1), 0.95)
+
     
     async def _get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get basic user information."""
@@ -566,34 +524,8 @@ Unified Response (plain text only):"""
         Perform direct vector similarity search using pre-generated embeddings.
         This avoids OpenAI API calls by using embeddings already stored in the database.
         """
-        # Map index names to node types and properties
-        index_config = {
-            "therapy_moments_index": {
-                "node_type": "Moment",
-                "embedding_property": "context_embedding",
-                "content_property": "context"
-            },
-            "user_reflections_index": {
-                "node_type": "Reflection", 
-                "embedding_property": "content_embedding",
-                "content_property": "content"
-            },
-            "therapist_notes_index": {
-                "node_type": "PersonaNote",
-                "embedding_property": "content_embedding", 
-                "content_property": "content"
-            },
-            "behavior_patterns_index": {
-                "node_type": "Pattern",
-                "embedding_property": "description_embedding",
-                "content_property": "description"
-            },
-            "user_values_index": {
-                "node_type": "Value",
-                "embedding_property": "description_embedding",
-                "content_property": "description"
-            }
-        }
+        # Map index names to node types and properties using shared config
+        index_config = get_index_config()
         
         config = index_config.get(index_name)
         if not config:
