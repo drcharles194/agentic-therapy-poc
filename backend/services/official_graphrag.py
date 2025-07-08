@@ -233,12 +233,15 @@ class OfficialGraphRAGService:
                     )
                     
                     if response and response.answer:
+                        # Convert index name to user-friendly format
+                        friendly_name = self._index_name_to_friendly(index_name)
+                        
                         results.append({
                             "index": index_name,
                             "answer": response.answer,
                             "response": response
                         })
-                        data_sources.append(index_name)
+                        data_sources.append(friendly_name)  # Use friendly name for data sources
                         logger.info(f"✅ Got response from {index_name} for user {user_id}")
                     
                 except Exception as e:
@@ -328,9 +331,8 @@ Unified Response (plain text only):"""
             unified_response = await self._call_llm_directly(synthesis_prompt)
             
             if unified_response and len(unified_response.strip()) > 50:
-                # Add metadata footer (plain text)
-                confidence = min(80 + (len(insights) * 5), 95)  # Higher confidence with more sources
-                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources • Confidence: {confidence}%"
+                # Add metadata footer (plain text, no confidence in text)
+                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources"
                 return unified_response.strip() + footer
             else:
                 # Fallback to simple combination
@@ -374,24 +376,61 @@ Unified Response (plain text only):"""
             logger.error(f"Direct LLM call failed: {e}")
             raise
     
+    def _index_name_to_friendly(self, index_name: str) -> str:
+        """Convert technical index names to user-friendly display names."""
+        friendly_names = {
+            "therapy_moments_index": "Therapy Moments",
+            "user_reflections_index": "User Reflections", 
+            "therapist_notes_index": "Therapist Notes",
+            "behavior_patterns_index": "Behavior Patterns",
+            "user_values_index": "User Values"
+        }
+        return friendly_names.get(index_name, index_name.replace('_index', '').replace('_', ' ').title())
+
     def _calculate_confidence(self, results: List[Dict]) -> float:
-        """Calculate confidence based on the number and quality of results."""
+        """Calculate dynamic confidence based on the number and quality of results."""
         if not results:
             return 0.1
         
-        # Base confidence on number of indexes that returned results
-        base_confidence = min(0.5 + (len(results) * 0.1), 0.9)
+        # Start with base confidence based on number of data sources
+        num_sources = len(results)
+        if num_sources >= 4:
+            base_confidence = 0.85
+        elif num_sources == 3:
+            base_confidence = 0.75  
+        elif num_sources == 2:
+            base_confidence = 0.65
+        else:
+            base_confidence = 0.55
         
-        # Adjust based on response quality
+        # Adjust based on response quality and length
         total_length = sum(len(result["answer"]) for result in results)
         avg_length = total_length / len(results)
         
-        if avg_length > 200:
-            base_confidence += 0.1
-        elif avg_length < 50:
-            base_confidence -= 0.1
+        # Quality multipliers
+        if avg_length > 300:  # Detailed responses
+            quality_bonus = 0.1
+        elif avg_length > 150:  # Moderate responses
+            quality_bonus = 0.05
+        elif avg_length < 50:   # Short responses
+            quality_bonus = -0.1
+        else:
+            quality_bonus = 0.0
+            
+        # Check for very short or generic responses
+        generic_indicators = ["no relevant information", "not found", "insufficient data"]
+        has_generic = any(
+            any(indicator in result["answer"].lower() for indicator in generic_indicators)
+            for result in results
+        )
         
-        return min(max(base_confidence, 0.1), 0.95)
+        if has_generic:
+            quality_bonus -= 0.15
+        
+        final_confidence = base_confidence + quality_bonus
+        
+        # Ensure confidence stays within bounds
+        return min(max(final_confidence, 0.1), 0.95)
     
     async def _get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get basic user information using the same approach as custom service."""

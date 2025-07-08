@@ -193,7 +193,7 @@ class Neo4jGraphRAGService:
                     user_name=user_info.get('name', 'Unknown'),
                     raw_data={"message": "No therapy content found"},
                     natural_response=f"I don't see any therapy content available for {user_info.get('name', 'this user')} yet. Once they have some therapy sessions, I'll be able to provide insights about their progress and patterns.",
-                    confidence=0.9,  # High confidence when no data exists
+                    confidence=0.95,  # High confidence when definitively no data exists
                     data_sources=[]
                 )
             
@@ -252,12 +252,15 @@ class Neo4jGraphRAGService:
                     user_name=user_info.get('name', 'Unknown'),
                     raw_data={"message": "No relevant insights found"},
                     natural_response=f"I found therapy content for {user_info.get('name', 'this user')}, but couldn't generate specific insights for your question. Please try asking about specific aspects like emotions, patterns, or recent sessions.",
-                    confidence=0.3,
+                    confidence=0.25,  # Low confidence when content exists but no insights generated
                     data_sources=list(available_indexes.keys())
                 )
             
             # Combine results with better formatting
             combined_response = await self._create_structured_response(all_results, query, user_info)
+            
+            # Calculate dynamic confidence based on results quality
+            confidence = self._calculate_confidence(all_results, available_indexes)
             
             return GraphRAGResult(
                 query=query,
@@ -265,7 +268,7 @@ class Neo4jGraphRAGService:
                 user_name=user_info.get('name', 'Unknown'),
                 raw_data={"analysis_sections": all_results, "available_indexes": available_indexes},
                 natural_response=combined_response,
-                confidence=0.8,  # High confidence when using multiple data sources
+                confidence=confidence,
                 data_sources=[result["source"] for result in all_results]
             )
             
@@ -385,9 +388,8 @@ Unified Response (plain text only):"""
             unified_response = await self._call_llm_directly(synthesis_prompt)
             
             if unified_response and len(unified_response.strip()) > 50:
-                # Add metadata footer (plain text)
-                confidence = min(80 + (len(insights) * 5), 95)  # Higher confidence with more sources
-                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources • Confidence: {confidence}%"
+                # Add metadata footer (plain text, no confidence in text)
+                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources"
                 return unified_response.strip() + footer
             else:
                 # Fallback to simple combination
@@ -420,10 +422,54 @@ Unified Response (plain text only):"""
             "",
             f"From a clinical perspective, these patterns suggest {user_name} is actively engaged in therapeutic work with identifiable areas for continued exploration and growth.",
             "",
-            f"Sources: {', '.join(sources)} • Confidence: {min(70 + len(insights) * 10, 90)}%"
+            f"Sources: {', '.join(sources)}"
         ])
         
         return "\n".join(response_parts)
+    
+    def _calculate_confidence(self, results: List[Dict], available_indexes: Dict[str, int]) -> float:
+        """Calculate dynamic confidence based on results quality and data availability."""
+        if not results:
+            return 0.1
+        
+        num_sources = len(results)
+        total_available = len(available_indexes)
+        
+        # Base confidence on coverage and number of sources
+        coverage_ratio = num_sources / max(total_available, 1)
+        if coverage_ratio >= 0.8:  # 4/5 or 3/4 indexes
+            base_confidence = 0.85
+        elif coverage_ratio >= 0.6:  # 3/5 indexes
+            base_confidence = 0.75
+        elif coverage_ratio >= 0.4:  # 2/5 indexes
+            base_confidence = 0.65
+        else:  # 1 index
+            base_confidence = 0.55
+        
+        # Quality assessment based on retrieved items and content
+        quality_bonus = 0.0
+        total_items = sum(result.get('retrieved_items', 0) for result in results)
+        avg_items_per_source = total_items / num_sources if num_sources > 0 else 0
+        
+        # Bonus for high-quality retrieval
+        if avg_items_per_source >= 3:
+            quality_bonus += 0.1
+        elif avg_items_per_source >= 2:
+            quality_bonus += 0.05
+        elif avg_items_per_source < 1:
+            quality_bonus -= 0.1
+            
+        # Bonus for multiple data points in available indexes
+        total_content = sum(available_indexes.values())
+        if total_content >= 10:
+            quality_bonus += 0.05
+        elif total_content < 3:
+            quality_bonus -= 0.05
+        
+        final_confidence = base_confidence + quality_bonus
+        
+        # Ensure confidence stays within bounds
+        return min(max(final_confidence, 0.1), 0.95)
     
     async def _get_user_info(self, user_id: str) -> Optional[Dict[str, Any]]:
         """Get basic user information."""
