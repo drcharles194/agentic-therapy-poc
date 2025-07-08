@@ -20,47 +20,14 @@ export interface ChatResponse {
 
 export interface MemoryData {
   user_id: string
-  user_name: string
+  user_name?: string
   sage: {
-    moments: Array<{
-      id: string
-      timestamp: string
-      context: string
-      session_id: string
-    }>
-    emotions: Array<{
-      id: string
-      label: string
-      intensity: number
-      nuance?: string
-      bodily_sensation?: string
-    }>
-    reflections: Array<{
-      id: string
-      content: string
-      insight_type: string
-      depth_level: number
-      confidence: number
-    }>
-    values: Array<{
-      id: string
-      name: string
-      description: string
-      importance: number
-    }>
-    patterns: Array<{
-      id: string
-      description: string
-      pattern_type: string
-      frequency: string
-    }>
-    notes: Array<{
-      id: string
-      persona: string
-      note_type: string
-      content: string
-      created_at: string
-    }>
+    moments: Array<any>
+    emotions: Array<any>
+    reflections: Array<any>
+    values: Array<any>
+    patterns: Array<any>
+    notes: Array<any>
   }
 }
 
@@ -72,6 +39,22 @@ export interface HealthResponse {
     neo4j: string
     anthropic: string
   }
+}
+
+export interface User {
+  user_id: string
+  name: string
+  created_at: string
+  last_active: string
+  moment_count: number
+}
+
+export interface CreateUserRequest {
+  name?: string
+}
+
+export interface UpdateUserRequest {
+  name: string
 }
 
 export const apiClient = {
@@ -90,6 +73,27 @@ export const apiClient = {
   // Health check endpoint
   healthCheck: async (): Promise<HealthResponse> => {
     const response = await api.post<HealthResponse>('/healthcheck')
+    return response.data
+  },
+
+  // User Management API Methods
+  createUser: async (request: CreateUserRequest = {}): Promise<User> => {
+    const response = await api.post<User>('/users/', request)
+    return response.data
+  },
+
+  getAllUsers: async (): Promise<{ users: User[] }> => {
+    const response = await api.get<{ users: User[] }>('/users/')
+    return response.data
+  },
+
+  getUser: async (userId: string): Promise<User> => {
+    const response = await api.get<User>(`/users/${userId}`)
+    return response.data
+  },
+
+  updateUser: async (userId: string, request: UpdateUserRequest): Promise<User> => {
+    const response = await api.put<User>(`/users/${userId}`, request)
     return response.data
   }
 }

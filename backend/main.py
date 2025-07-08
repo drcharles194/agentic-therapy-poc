@@ -11,7 +11,7 @@ from starlette.exceptions import HTTPException
 
 from backend.config import settings
 from backend.models.schema import ErrorResponse
-from backend.routers import chat
+from backend.routers import chat, users
 from backend.services.neo4j import neo4j_service
 from backend.services.anthropic_service import anthropic_service
 
@@ -127,6 +127,7 @@ async def general_exception_handler(request: Request, exc: Exception):
 
 # Include routers
 app.include_router(chat.router, tags=["chat"])
+app.include_router(users.router, tags=["users"])
 
 
 # Root endpoint

@@ -18,6 +18,30 @@ class ChatResponse(BaseModel):
     persona_response: str = Field(..., description="Response from the active persona")
 
 
+class User(BaseModel):
+    """Model for user information."""
+    user_id: str = Field(..., description="Unique UUID identifier for the user")
+    name: str = Field(..., description="Friendly display name for the user")
+    created_at: datetime = Field(default_factory=datetime.utcnow, description="When the user was created")
+    last_active: datetime = Field(default_factory=datetime.utcnow, description="When the user was last active")
+    moment_count: int = Field(default=0, description="Number of conversation moments for this user")
+
+
+class CreateUserRequest(BaseModel):
+    """Request model for creating a new user."""
+    name: Optional[str] = Field(None, description="Optional custom name, will be auto-generated if not provided")
+
+
+class UpdateUserRequest(BaseModel):
+    """Request model for updating user information."""
+    name: str = Field(..., min_length=1, description="New display name for the user")
+
+
+class UserListResponse(BaseModel):
+    """Response model for listing users."""
+    users: List[User] = Field(..., description="List of users")
+
+
 class HealthCheckResponse(BaseModel):
     """Response model for health check endpoint."""
     status: str = Field(default="healthy", description="Service health status")

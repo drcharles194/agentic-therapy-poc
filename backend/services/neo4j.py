@@ -82,12 +82,12 @@ class Neo4jService:
         except Exception:
             return False
     
-    async def _ensure_user_exists(self, user_id: str) -> bool:
-        """Ensure a User node exists for the given user_id."""
+    async def _ensure_user_exists(self, user_id: str, user_name: str = None) -> bool:
+        """Ensure a User node exists for the given user_id, optionally setting the name."""
         query = """
         MERGE (u:User {user_id: $user_id})
         ON CREATE SET 
-            u.name = null,
+            u.name = $user_name,
             u.created_at = datetime(),
             u.last_active = datetime()
         ON MATCH SET 
@@ -97,7 +97,7 @@ class Neo4jService:
         
         result = await self._execute_query(
             query,
-            {"user_id": user_id},
+            {"user_id": user_id, "user_name": user_name},
             "user existence check"
         )
         return result is not None
@@ -830,6 +830,66 @@ class Neo4jService:
             logger.error(f"Failed to process complex memory proposal {update_type}: {e}")
             return False
 
+    async def get_all_users(self) -> List[Dict[str, Any]]:
+        """Get all users with their metadata and conversation counts."""
+        query = """
+        MATCH (u:User)
+        WHERE u.user_id <> '__SCHEMA_DUMMY__'
+        OPTIONAL MATCH (u)-[:HAD_MOMENT]->(m:Moment)
+        WITH u, COUNT(m) as moment_count
+        RETURN u.user_id as user_id,
+               u.name as name,
+               u.created_at as created_at,
+               u.last_active as last_active,
+               moment_count
+        ORDER BY u.last_active DESC
+        """
+        
+        try:
+            async with self.get_session() as session:
+                result = await session.run(query)
+                users = []
+                async for record in result:
+                    # Handle null names and convert Neo4j DateTime to Python datetime
+                    user_data = {
+                        "user_id": record["user_id"],
+                        "name": record["name"] or record["user_id"][-8:],  # Fallback to last 8 chars if name is null
+                        "created_at": record["created_at"].to_native() if record["created_at"] else None,
+                        "last_active": record["last_active"].to_native() if record["last_active"] else None,
+                        "moment_count": record["moment_count"] or 0
+                    }
+                    users.append(user_data)
+                return users
+        except Exception as e:
+            logger.error(f"Error retrieving all users: {e}")
+            return []
+
+    async def update_user_name(self, user_id: str, new_name: str) -> bool:
+        """Update a user's display name."""
+        query = """
+        MATCH (u:User {user_id: $user_id})
+        SET u.name = $new_name,
+            u.last_active = datetime()
+        RETURN u.user_id as user_id
+        """
+        
+        result = await self._execute_query(
+            query,
+            {"user_id": user_id, "new_name": new_name},
+            "user name update"
+        )
+        
+        if result:
+            logger.info(f"Updated name for user {user_id} to: {new_name}")
+            return True
+        return False
+
 
 # Global service instance
-neo4j_service = Neo4jService() 
+neo4j_service = Neo4jService()
+
+
+# FastAPI dependency
+def get_neo4j_service() -> Neo4jService:
+    """FastAPI dependency to get Neo4j service instance."""
+    return neo4j_service 

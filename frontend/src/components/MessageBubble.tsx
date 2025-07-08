@@ -15,14 +15,14 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   
   return (
     <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-      <div className={`max-w-xs lg:max-w-md px-4 py-2 rounded-lg ${
+      <div className={`max-w-xs lg:max-w-md px-4 py-3 rounded-lg shadow-sm ${
         isUser 
-          ? 'bg-blue-600 text-white' 
-          : 'bg-gray-200 text-gray-800'
+          ? 'bg-collaborative-primary text-white' 
+          : 'bg-pastel-purple-100 text-collaborative-text border border-pastel-purple-200'
       }`}>
-        <p className="text-sm">{message.content}</p>
+        <p className="text-sm leading-relaxed">{message.content}</p>
         <p className={`text-xs mt-1 ${
-          isUser ? 'text-blue-100' : 'text-gray-500'
+          isUser ? 'text-purple-100' : 'text-collaborative-text-light'
         }`}>
           {format(message.timestamp, 'h:mm a')}
         </p>
