@@ -245,9 +245,9 @@ class OfficialGraphRAGService:
                     logger.warning(f"⚠️ Query failed for {index_name} (user {user_id}): {e}")
                     continue
             
-            # Step 4: Combine results from all indexes
+            # Step 4: Combine results from all indexes using Anthropic synthesis
             if results:
-                combined_response = self._combine_results(results, query)
+                combined_response = await self._synthesize_unified_response(results, query, user_info)
                 confidence = self._calculate_confidence(results)
             else:
                 combined_response = f"No relevant information found for user {user_info.get('name', 'this user')} regarding: {query}"
@@ -276,8 +276,72 @@ class OfficialGraphRAGService:
             logger.error(f"❌ Error in official GraphRAG query: {e}")
             return self._create_error_result(user_id, query, f"Query processing error: {str(e)}")
     
-    def _combine_results(self, results: List[Dict], original_query: str) -> str:
-        """Combine results from multiple indexes into a coherent response."""
+    async def _synthesize_unified_response(
+        self, 
+        results: List[Dict], 
+        query: str, 
+        user_info: Dict[str, Any]
+    ) -> str:
+        """Synthesize multiple insights into a unified therapeutic response using Anthropic."""
+        if not results:
+            return "No relevant information found."
+        
+        if len(results) == 1:
+            return results[0]["answer"]
+        
+        user_name = user_info.get('name', 'this user')
+        
+        # Extract insights and source information
+        insights = []
+        sources = []
+        
+        for result in results:
+            index_name = result["index"].replace("_index", "").replace("_", " ").title()
+            answer = result["answer"]
+            insights.append(answer)
+            sources.append(index_name)
+        
+        # Create synthesis prompt for Anthropic
+        synthesis_prompt = f"""
+You are a skilled therapist reviewing multiple data sources about {user_name}. Your task is to provide a comprehensive, unified response to this question: "{query}"
+
+Available insights from different therapeutic data sources:
+
+{chr(10).join([f"Source {i+1} ({sources[i]}): {insight}" for i, insight in enumerate(insights)])}
+
+Instructions:
+- Synthesize these insights into ONE cohesive therapeutic response
+- Focus on the most relevant patterns and themes
+- Provide specific, actionable therapeutic insights
+- Use clear, professional language appropriate for clinical review
+- Structure your response with clear paragraphs - DO NOT use markdown formatting
+- Use plain text only - no asterisks, hashtags, or other markdown symbols
+- If insights conflict, acknowledge the complexity
+- Conclude with therapeutic implications or recommendations
+
+Data sources analyzed: {', '.join(sources)}
+
+Unified Response (plain text only):"""
+
+        try:
+            # Generate unified response using Anthropic
+            unified_response = await self._call_llm_directly(synthesis_prompt)
+            
+            if unified_response and len(unified_response.strip()) > 50:
+                # Add metadata footer (plain text)
+                confidence = min(80 + (len(insights) * 5), 95)  # Higher confidence with more sources
+                footer = f"\n\nAnalysis Summary: Based on {len(insights)} therapeutic data sources • Confidence: {confidence}%"
+                return unified_response.strip() + footer
+            else:
+                # Fallback to simple combination
+                return self._combine_results_fallback(results, query)
+                
+        except Exception as e:
+            logger.warning(f"⚠️ Error synthesizing unified response: {e}")
+            return self._combine_results_fallback(results, query)
+    
+    def _combine_results_fallback(self, results: List[Dict], original_query: str) -> str:
+        """Fallback method to combine results when synthesis fails."""
         if not results:
             return "No relevant information found."
         
@@ -297,6 +361,18 @@ class OfficialGraphRAGService:
         combined_response += "\n\n".join(combined_insights)
         
         return combined_response
+    
+    async def _call_llm_directly(self, prompt: str) -> str:
+        """Call Anthropic LLM directly for response synthesis."""
+        try:
+            response = await self.llm.ainvoke(prompt)
+            if hasattr(response, 'content'):
+                return response.content
+            else:
+                return str(response)
+        except Exception as e:
+            logger.error(f"Direct LLM call failed: {e}")
+            raise
     
     def _calculate_confidence(self, results: List[Dict]) -> float:
         """Calculate confidence based on the number and quality of results."""
