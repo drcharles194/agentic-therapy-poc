@@ -18,6 +18,12 @@ We maintain **two GraphRAG implementations** for therapy data analysis:
 
 Both implementations provide intelligent therapy data analysis with confidence scoring and user-friendly data source reporting.
 
+## See it in action
+
+I've created a brief demo video to explain this project!
+
+[Click me to see the demo video](https://www.loom.com/share/8488cd8eb3104020a32031cbb342cc1a?sid=6b3564cc-fce4-4be0-9c8f-82dbf6019ac1)
+
 ## 🚀 Quick Start
 
 ### Prerequisites
