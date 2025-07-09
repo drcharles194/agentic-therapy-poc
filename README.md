@@ -6,7 +6,7 @@ An advanced conversational AI platform with persona-aware LLM orchestration, fea
 
 This is a monorepo containing:
 
-- **Backend**: FastAPI + Python with LangChain orchestration and Neo4j graph database
+- **Backend**: FastAPI + Python with LangChain orchestration (pending) and Neo4j graph database
 - **Frontend**: React + Vite + TypeScript with modern UI components
 
 ### GraphRAG Implementation
